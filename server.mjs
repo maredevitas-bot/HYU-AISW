@@ -18,6 +18,7 @@ import {
   openFoodFactsNutrition,
 } from './product-nutrition.mjs'
 import { isCommunityProduct, productCacheHours, shouldRetryFoodSafety } from './source-policy.mjs'
+import { validateRetailBarcode } from './barcode-validation.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const rootDir = resolve(__dirname)
@@ -71,10 +72,6 @@ async function readJsonBody(req, limit = 64 * 1024) {
 
   if (chunks.length === 0) return {}
   return JSON.parse(Buffer.concat(chunks).toString('utf8'))
-}
-
-function cleanBarcode(value) {
-  return String(value ?? '').replace(/\D/g, '')
 }
 
 const nutrientKeys = ['kcal', 'carbs', 'protein', 'fat', 'sodium', 'calcium', 'iron']
@@ -790,7 +787,7 @@ async function enrichPackagePartsWithWasteApi(packageParts) {
       const query = wasteSearchTermForPart(part)
 
       if (!query) {
-        return { ...part, source: '재질 추정' }
+        return { ...part, source: '재질 추정', confidence: part.confidence ?? 'material-inferred' }
       }
 
       const result = await queryWasteItem(query)
@@ -802,6 +799,7 @@ async function enrichPackagePartsWithWasteApi(packageParts) {
           ...part,
           query,
           source: result.error ? `재질 추정(API 미응답: ${result.error})` : '재질 추정',
+          confidence: part.confidence ?? 'material-inferred',
         }
       }
 
@@ -811,6 +809,7 @@ async function enrichPackagePartsWithWasteApi(packageParts) {
         stream: method,
         guide: `${part.guide} 공공데이터포털 분리배출 품목 "${itemName}" 기준 대표 배출방법은 ${method}입니다.`,
         source: '분리배출 정보조회 API',
+        confidence: 'official-confirmed',
       }
     }),
   )
@@ -879,6 +878,7 @@ function packagePartsFromMaterial(materialText) {
       material,
       stream: guide.stream,
       guide: guide.guide,
+      confidence: 'material-inferred',
     }
   })
 }
@@ -888,18 +888,18 @@ function guessPackagePartsFromText(text) {
 
   if (source.includes('음료') || source.includes('주스') || source.includes('water') || source.includes('drink')) {
     return [
-      { part: '병', material: 'PET 또는 유리', stream: '표시 확인', guide: '라벨을 떼고 내용물을 비운 뒤 분리배출 표시를 확인합니다.' },
-      { part: '라벨/뚜껑', material: '비닐류/플라스틱', stream: '각 재질별', guide: '분리 가능한 부품은 따로 배출합니다.' },
+      { part: '병', material: 'PET 또는 유리', stream: '표시 확인', guide: '라벨을 떼고 내용물을 비운 뒤 분리배출 표시를 확인합니다.', confidence: 'label-required' },
+      { part: '라벨/뚜껑', material: '비닐류/플라스틱', stream: '각 재질별', guide: '분리 가능한 부품은 따로 배출합니다.', confidence: 'label-required' },
     ]
   }
 
   if (source.includes('캔')) {
-    return [{ part: '용기', material: '금속캔', stream: '캔류', guide: '내용물을 비우고 헹군 뒤 캔류로 배출합니다.' }]
+    return [{ part: '용기', material: '금속캔', stream: '캔류', guide: '내용물을 비우고 헹군 뒤 캔류로 배출합니다.', confidence: 'material-inferred' }]
   }
 
   return [
-    { part: '외포장', material: '포장재 표시 확인', stream: '직접 확인', guide: '바코드 주변 또는 뒷면의 분리배출 표시를 보고 재질별로 배출합니다.' },
-    { part: '라벨/부속 포장', material: '비닐류 또는 종이', stream: '각 재질별', guide: '떼어낼 수 있는 부품은 분리해서 배출합니다.' },
+    { part: '외포장', material: '포장재 표시 확인', stream: '직접 확인', guide: '바코드 주변 또는 뒷면의 분리배출 표시를 보고 재질별로 배출합니다.', confidence: 'label-required' },
+    { part: '라벨/부속 포장', material: '비닐류 또는 종이', stream: '각 재질별', guide: '떼어낼 수 있는 부품은 분리해서 배출합니다.', confidence: 'label-required' },
   ]
 }
 
@@ -1104,11 +1104,21 @@ async function handleMeal(req, res) {
 }
 
 function ensureProductNutritionBasis(barcode, product) {
-  if (product?.nutritionBasis && Array.isArray(product.availableNutrients)) return product
+  const hadPackageConfidence = asArray(product?.packageParts).every((part) => part.confidence)
+  const packageParts = asArray(product?.packageParts).map((part) => ({
+    ...part,
+    confidence: part.confidence
+      ?? (part.source === '분리배출 정보조회 API' ? 'official-confirmed'
+        : part.material?.includes('표시 확인') ? 'label-required' : 'material-inferred'),
+  }))
+  if (product?.nutritionBasis && Array.isArray(product.availableNutrients) && hadPackageConfidence) {
+    return product
+  }
   const haccpRow = !isCommunityProduct(product) ? findHaccpProductByBarcode(barcode) : null
-  if (!haccpRow) return product
+  if (!haccpRow) return { ...product, packageParts }
   return {
     ...product,
+    packageParts,
     nutritionBasis: product.nutritionBasis ?? nutritionBasisFromText(haccpRow.nutrient, haccpRow.capacity),
     availableNutrients: Array.isArray(product.availableNutrients) ? product.availableNutrients : availableNutrientsFromText(haccpRow.nutrient),
   }
@@ -1136,10 +1146,11 @@ function sendFoundProduct(res, barcode, product, diagnostics, cache = true) {
 }
 
 async function handleBarcode(req, res, barcode) {
-  const normalized = cleanBarcode(barcode)
+  const validation = validateRetailBarcode(barcode)
+  const normalized = validation.barcode
 
-  if (normalized.length < 8) {
-    sendError(res, 400, '8자리 이상의 바코드가 필요합니다.')
+  if (!validation.valid) {
+    sendError(res, 400, validation.message)
     return
   }
 
@@ -1341,6 +1352,19 @@ async function handleFoodLog(req, res, entryId = '') {
 
 async function handleApi(req, res) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+
+  if (url.pathname === '/api/health') {
+    const stats = getDatabaseStats()
+    sendJson(res, 200, {
+      ok: true,
+      status: 'ready',
+      uptimeSeconds: Math.round(process.uptime()),
+      databaseReady: true,
+      haccpProductsWithBarcode: stats.haccpProductsWithBarcode,
+      checkedAt: new Date().toISOString(),
+    })
+    return true
+  }
 
   if (url.pathname === '/api/food-log') {
     await handleFoodLog(req, res)

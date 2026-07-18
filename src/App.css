@@ -628,6 +628,54 @@ button:disabled {
   line-height: 1.4;
 }
 
+.recycling-confidence-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+
+.package-confidence {
+  justify-self: start;
+  padding: 4px 7px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  font-size: 0.72rem;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.confidence-official-confirmed {
+  border-color: #b9dcc8;
+  background: #eaf7ef;
+  color: #246344;
+}
+
+.confidence-material-inferred {
+  border-color: #d6c693;
+  background: #fff8df;
+  color: #745d18;
+}
+
+.confidence-label-required {
+  border-color: #e4c2b7;
+  background: #fff2ee;
+  color: #8a4633;
+}
+
+.reference-note {
+  margin: -2px 0 16px;
+  color: var(--muted);
+  font-size: 0.78rem;
+  line-height: 1.55;
+}
+
+.reference-note a {
+  color: #245f43;
+  font-weight: 800;
+  text-underline-offset: 2px;
+}
+
 .nutrient-row {
   display: grid;
   gap: 7px;

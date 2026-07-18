@@ -1,0 +1,17 @@
+[
+  { "barcode": "8801024949960", "expectedName": "국산콩두부", "physicalPackageChecked": false },
+  { "barcode": "8801062637560", "expectedName": "빼빼로", "physicalPackageChecked": false },
+  { "barcode": "8801013120110", "expectedName": "갈색설탕", "physicalPackageChecked": false },
+  { "barcode": "8801013110111", "expectedName": "하얀설탕", "physicalPackageChecked": false },
+  { "barcode": "8801069300276", "expectedName": "초코에몽", "physicalPackageChecked": false },
+  { "barcode": "8801069170466", "expectedName": "아인슈타인 베이비", "physicalPackageChecked": false },
+  { "barcode": "8801068086959", "expectedName": "미니딸기샌드", "physicalPackageChecked": false },
+  { "barcode": "8801068086874", "expectedName": "나눠먹는 땅콩크림빵", "physicalPackageChecked": false },
+  { "barcode": "8801068087130", "expectedName": "56시간 저온숙성", "physicalPackageChecked": false },
+  { "barcode": "8801068077742", "expectedName": "소프트치즈케익미니", "physicalPackageChecked": false },
+  { "barcode": "8801068087246", "expectedName": "샤니꿀호떡", "physicalPackageChecked": false },
+  { "barcode": "8801169210772", "expectedName": "위대한떡볶이", "physicalPackageChecked": false },
+  { "barcode": "8801169770085", "expectedName": "속이편한누룽지", "physicalPackageChecked": false },
+  { "barcode": "8801169190654", "expectedName": "와후카레 매운맛", "physicalPackageChecked": false },
+  { "barcode": "8801062417339", "expectedName": "아이스를머금은순수밀크", "physicalPackageChecked": false }
+]

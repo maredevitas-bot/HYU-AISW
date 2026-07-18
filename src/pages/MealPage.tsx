@@ -4,18 +4,19 @@ import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog } from '../foodLog'
 import { calculateMealIntakeRatio } from '../../meal-intake.mjs'
 import {
-  activityOptions,
+  ageGroupOptions,
   addMealNutrients,
   emptyNutrients,
   formatNutrient,
+  genderOptions,
+  KDRI_SOURCE_URL,
   makeLunchTarget,
   nutrientMeta,
   nutrientPercent,
-  profileTargets,
   scaleNutrients,
   sumNutrients,
   todayInputValue,
-  type Activity,
+  type AgeGroup,
   type Gender,
   type MealItem,
   type Nutrients,
@@ -48,9 +49,9 @@ type MealApiRow = {
 type MealPageProps = {
   ownerId: string
   gender: Gender
-  activity: Activity
+  ageGroup: AgeGroup
   onGenderChange: (gender: Gender) => void
-  onActivityChange: (activity: Activity) => void
+  onAgeGroupChange: (ageGroup: AgeGroup) => void
   onSaved: () => void
 }
 
@@ -174,7 +175,7 @@ function servingAdvice(total: Nutrients, target: Nutrients, live: boolean) {
   ]
 }
 
-export default function MealPage({ ownerId, gender, activity, onGenderChange, onActivityChange, onSaved }: MealPageProps) {
+export default function MealPage({ ownerId, gender, ageGroup, onGenderChange, onAgeGroupChange, onSaved }: MealPageProps) {
   const [schoolName, setSchoolName] = useState('한세사이버보안고등학교')
   const [schoolOptions, setSchoolOptions] = useState<SchoolRow[]>([])
   const [selectedSchool, setSelectedSchool] = useState<SchoolRow>()
@@ -188,7 +189,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
   const fullMealTotal = useMemo(() => isLiveMeal ? (mealPlan[0]?.nutrients ?? emptyNutrients()) : addMealNutrients(mealPlan), [isLiveMeal, mealPlan])
   const intakeRatio = useMemo(() => calculateMealIntakeRatio(trayDishes, trayPortions), [trayDishes, trayPortions])
   const total = useMemo(() => estimateTrayNutrients(fullMealTotal, trayDishes, trayPortions, isLiveMeal), [fullMealTotal, isLiveMeal, trayDishes, trayPortions])
-  const target = useMemo(() => makeLunchTarget(gender, activity), [gender, activity])
+  const target = useMemo(() => makeLunchTarget(gender, ageGroup), [ageGroup, gender])
   const advice = useMemo(() => servingAdvice(fullMealTotal, target, isLiveMeal), [fullMealTotal, isLiveMeal, target])
 
   const setDishPortion = (dishId: string, portion: number) => {
@@ -303,18 +304,19 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           <div className="panel-heading"><span>급식표 조회</span><h2>학교와 날짜</h2></div>
           <div className="profile-controls">
             <div className="control-row" aria-label="학생 기준">
-              {(Object.keys(profileTargets) as Gender[]).map((option) => (
-                <button className={gender === option ? 'segmented active' : 'segmented'} key={option} type="button" onClick={() => onGenderChange(option)}>{profileTargets[option].label}</button>
+              {(Object.keys(genderOptions) as Gender[]).map((option) => (
+                <button className={gender === option ? 'segmented active' : 'segmented'} key={option} type="button" onClick={() => onGenderChange(option)}>{genderOptions[option].label}</button>
               ))}
             </div>
-            <div className="control-row three" aria-label="활동량">
-              {(Object.keys(activityOptions) as Activity[]).map((option) => (
-                <button className={activity === option ? 'segmented active' : 'segmented'} key={option} type="button" onClick={() => onActivityChange(option)}>{activityOptions[option].label}</button>
+            <div className="control-row" aria-label="연령 구간">
+              {(Object.keys(ageGroupOptions) as AgeGroup[]).map((option) => (
+                <button className={ageGroup === option ? 'segmented active' : 'segmented'} key={option} type="button" onClick={() => onAgeGroupChange(option)}>{ageGroupOptions[option].label}</button>
               ))}
             </div>
           </div>
 
-          <div className="target-card"><span>점심 목표</span><strong>{target.kcal.toLocaleString('ko-KR')} kcal</strong><small>하루 기준 {target.dayKcal.toLocaleString('ko-KR')} kcal</small></div>
+          <div className="target-card"><span>점심 참고량</span><strong>{target.kcal.toLocaleString('ko-KR')} kcal</strong><small>하루 에너지 필요추정량 {target.dayKcal.toLocaleString('ko-KR')} kcal</small></div>
+          <p className="reference-note">건강한 {ageGroupOptions[ageGroup].label} 청소년을 위한 <a href={KDRI_SOURCE_URL} target="_blank" rel="noreferrer">2025 한국인 영양소 섭취기준</a> 참고값입니다. 키·체중·개인 활동량을 반영한 진단이나 식사 처방이 아닙니다. 나트륨은 만성질환 위험감소섭취량을 상한 참고선으로 사용합니다.</p>
 
           <div className="api-tools">
             <label className="api-input"><span>학교명</span><div><input aria-label="학교명 검색" value={schoolName} onChange={(event) => setSchoolName(event.target.value)} /><button type="button" onClick={searchSchools}>검색</button></div></label>

@@ -3,7 +3,7 @@ import { CalendarDays, ScanBarcode, Utensils, type LucideIcon } from 'lucide-rea
 import heroImage from './assets/hero.png'
 import './App.css'
 import { getOwnerId } from './foodLog'
-import { type Activity, type Gender } from './nutrition'
+import { type AgeGroup, type Gender } from './nutrition'
 import CalendarPage from './pages/CalendarPage'
 import MealPage from './pages/MealPage'
 import ScanPage from './pages/ScanPage'
@@ -25,16 +25,15 @@ function savedGender(): Gender {
   return window.localStorage.getItem('nutricycle-gender') === 'male' ? 'male' : 'female'
 }
 
-function savedActivity(): Activity {
-  const value = window.localStorage.getItem('nutricycle-activity')
-  return value === 'low' || value === 'high' ? value : 'normal'
+function savedAgeGroup(): AgeGroup {
+  return window.localStorage.getItem('nutricycle-age-group') === '12-14' ? '12-14' : '15-18'
 }
 
 function App() {
   const ownerId = useMemo(() => getOwnerId(), [])
   const [page, setPage] = useState<Page>(pageFromPath)
   const [gender, setGender] = useState<Gender>(savedGender)
-  const [activity, setActivity] = useState<Activity>(savedActivity)
+  const [ageGroup, setAgeGroup] = useState<AgeGroup>(savedAgeGroup)
   const [refreshKey, setRefreshKey] = useState(0)
 
   useEffect(() => {
@@ -44,7 +43,7 @@ function App() {
   }, [])
 
   useEffect(() => { window.localStorage.setItem('nutricycle-gender', gender) }, [gender])
-  useEffect(() => { window.localStorage.setItem('nutricycle-activity', activity) }, [activity])
+  useEffect(() => { window.localStorage.setItem('nutricycle-age-group', ageGroup) }, [ageGroup])
 
   const navigate = (next: Page) => {
     const item = pages.find((candidate) => candidate.id === next)
@@ -72,9 +71,9 @@ function App() {
       </header>
 
       <main>
-        {page === 'meal' && <MealPage ownerId={ownerId} gender={gender} activity={activity} onGenderChange={setGender} onActivityChange={setActivity} onSaved={() => setRefreshKey((value) => value + 1)} />}
+        {page === 'meal' && <MealPage ownerId={ownerId} gender={gender} ageGroup={ageGroup} onGenderChange={setGender} onAgeGroupChange={setAgeGroup} onSaved={() => setRefreshKey((value) => value + 1)} />}
         {page === 'scan' && <ScanPage ownerId={ownerId} onSaved={() => setRefreshKey((value) => value + 1)} />}
-        {page === 'calendar' && <CalendarPage ownerId={ownerId} gender={gender} activity={activity} refreshKey={refreshKey} />}
+        {page === 'calendar' && <CalendarPage ownerId={ownerId} refreshKey={refreshKey} />}
       </main>
     </div>
   )

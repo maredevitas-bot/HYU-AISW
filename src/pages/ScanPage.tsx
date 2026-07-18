@@ -3,7 +3,8 @@ import { Globe2, Scale } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog, type MealType } from '../foodLog'
-import { emptyNutrients, formatNutrient, nutrientMeta, scaleNutrients, todayInputValue, type Product } from '../nutrition'
+import { emptyNutrients, formatNutrient, nutrientMeta, scaleNutrients, todayInputValue, type Product, type RecyclingConfidence } from '../nutrition'
+import { normalizeBarcode, validateRetailBarcode } from '../../barcode-validation.mjs'
 
 type ScanPageProps = {
   ownerId: string
@@ -31,8 +32,10 @@ const barcodeSamples = [
   { label: 'Nutella', barcode: '3017620422003' },
 ]
 
-function normalizeBarcode(value: string) {
-  return value.replace(/\D/g, '')
+const recyclingConfidence: Record<RecyclingConfidence, { label: string; description: string }> = {
+  'official-confirmed': { label: '공공 API 확인', description: '분리배출 정보조회 API가 대표 배출방법을 반환했습니다.' },
+  'material-inferred': { label: '재질 기반 추정', description: '제품 데이터의 포장 재질을 기준으로 안내합니다.' },
+  'label-required': { label: '포장 표시 확인 필요', description: '포장 재질이 확정되지 않아 실제 분리배출 표시를 확인해야 합니다.' },
 }
 
 export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
@@ -83,8 +86,9 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   }, [])
 
   const lookupBarcode = useCallback(async (rawValue: string) => {
-    const normalized = normalizeBarcode(rawValue)
-    if (normalized.length < 8) return setScannerStatus('8자리 이상의 바코드를 입력해 주세요.')
+    const validation = validateRetailBarcode(rawValue)
+    const normalized = validation.barcode
+    if (!validation.valid) return setScannerStatus(validation.message)
     setBarcodeInput(normalized)
     setScannerStatus('공공데이터에서 제품 조회 중')
 
@@ -114,8 +118,13 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   }, [stopScanner])
 
   const handleBarcodeValue = useCallback((rawValue: string) => {
-    const normalized = normalizeBarcode(rawValue)
-    if (normalized.length < 8 || normalized === lastDetectedRef.current) return
+    const validation = validateRetailBarcode(rawValue)
+    const normalized = validation.barcode
+    if (!validation.valid) {
+      setScannerStatus(validation.message)
+      return
+    }
+    if (normalized === lastDetectedRef.current) return
     lastDetectedRef.current = normalized
     void lookupBarcode(normalized)
   }, [lookupBarcode])
@@ -237,7 +246,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
             <div className="scanner-overlay"><span>{scannerStatus}</span></div>
           </div>
           <div className="scanner-actions"><button className="primary-button" type="button" onClick={startScanner} disabled={isScanning}>스캔 시작</button><button type="button" onClick={stopScanner} disabled={!isScanning}>정지</button></div>
-          <label className="manual-input"><span>바코드 번호</span><div><input aria-label="바코드 번호 조회" inputMode="numeric" value={barcodeInput} onChange={(event) => setBarcodeInput(event.target.value)} onKeyDown={(event) => { if (event.key === 'Enter') void lookupBarcode(barcodeInput) }} /><button type="button" onClick={() => void lookupBarcode(barcodeInput)}>조회</button></div></label>
+          <label className="manual-input"><span>바코드 번호</span><div><input aria-label="바코드 번호 조회" inputMode="numeric" value={barcodeInput} onChange={(event) => setBarcodeInput(normalizeBarcode(event.target.value))} onKeyDown={(event) => { if (event.key === 'Enter') void lookupBarcode(barcodeInput) }} /><button type="button" onClick={() => void lookupBarcode(barcodeInput)}>조회</button></div></label>
           <div className="sample-buttons" aria-label="시연 바코드">{barcodeSamples.map((sample) => <button key={sample.barcode} type="button" onClick={() => void lookupBarcode(sample.barcode)}>{sample.label}</button>)}</div>
         </article>
 
@@ -259,7 +268,12 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
           <article className="panel recycle-panel">
             <div className="panel-heading"><span>분리배출</span><h2>포장 구성</h2></div>
             <div className="result-source-row"><DataSourceBadge label={selectedProduct.packageParts.find((part) => part.source)?.source ?? '제품 표시 기반 분리배출 안내'} /></div>
-            <div className="package-list">{(selectedProduct.packageParts.length ? selectedProduct.packageParts : [{ part: '제품 포장', material: '표시 확인 필요', stream: '직접 확인', guide: '포장재의 분리배출 표시를 확인해 주세요.' }]).map((part, index) => <div className="package-row" key={`${part.part}-${part.material}-${index}`}><div><strong>{part.part}</strong><span>{part.material}</span></div><em>{part.stream}</em><p>{part.guide}</p>{part.source && <small className="package-source">{part.source}{part.query ? ` · 검색어 ${part.query}` : ''}</small>}</div>)}</div>
+            <div className="recycling-confidence-legend" aria-label="분리배출 근거 수준">{Object.entries(recyclingConfidence).map(([key, value]) => <span className={`package-confidence confidence-${key}`} key={key}>{value.label}</span>)}</div>
+            <div className="package-list">{(selectedProduct.packageParts.length ? selectedProduct.packageParts : [{ part: '제품 포장', material: '표시 확인 필요', stream: '직접 확인', guide: '포장재의 분리배출 표시를 확인해 주세요.', confidence: 'label-required' as RecyclingConfidence }]).map((part, index) => {
+              const confidence = part.confidence ?? 'label-required'
+              const confidenceInfo = recyclingConfidence[confidence]
+              return <div className="package-row" key={`${part.part}-${part.material}-${index}`}><div><strong>{part.part}</strong><span>{part.material}</span></div><em>{part.stream}</em><span className={`package-confidence confidence-${confidence}`} title={confidenceInfo.description}>{confidenceInfo.label}</span><p>{part.guide}</p>{part.source && <small className="package-source">{part.source}{part.query ? ` · 검색어 ${part.query}` : ''}</small>}</div>
+            })}</div>
           </article>
         </div>}
       </div>

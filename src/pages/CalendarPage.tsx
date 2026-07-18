@@ -7,14 +7,10 @@ import {
   nutrientMeta,
   sumNutrients,
   todayInputValue,
-  type Activity,
-  type Gender,
 } from '../nutrition'
 
 type CalendarPageProps = {
   ownerId: string
-  gender: Gender
-  activity: Activity
   refreshKey: number
 }
 

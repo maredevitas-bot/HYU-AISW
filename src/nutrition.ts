@@ -1,5 +1,12 @@
-export type Gender = 'female' | 'male'
-export type Activity = 'low' | 'normal' | 'high'
+export {
+  KDRI_SOURCE_URL,
+  ageGroupOptions,
+  genderOptions,
+  kdriProfiles,
+  makeDailyTarget,
+  makeLunchTarget,
+} from '../nutrition-targets.mjs'
+export type { AgeGroup, Gender } from '../nutrition-targets.mjs'
 
 export type Nutrients = {
   kcal: number
@@ -29,7 +36,10 @@ export type PackagePart = {
   guide: string
   source?: string
   query?: string
+  confidence?: RecyclingConfidence
 }
+
+export type RecyclingConfidence = 'official-confirmed' | 'material-inferred' | 'label-required'
 
 export type ProductDataScope = 'domestic-public' | 'global-community'
 
@@ -58,17 +68,6 @@ export type Product = {
   reportNo?: string
   ingredients?: string[]
   safetyFlags?: string[]
-}
-
-export const activityOptions: Record<Activity, { label: string; factor: number }> = {
-  low: { label: '활동 적음', factor: 0.92 },
-  normal: { label: '보통', factor: 1 },
-  high: { label: '운동 많음', factor: 1.12 },
-}
-
-export const profileTargets: Record<Gender, { label: string; dayKcal: number; protein: number; calcium: number; iron: number }> = {
-  female: { label: '여학생', dayKcal: 2000, protein: 55, calcium: 900, iron: 14 },
-  male: { label: '남학생', dayKcal: 2600, protein: 65, calcium: 900, iron: 11 },
 }
 
 export const nutrientMeta = [
@@ -105,36 +104,6 @@ export function scaleNutrients(value: Nutrients, quantity: number): Nutrients {
   return Object.fromEntries(
     nutrientMeta.map(({ key }) => [key, Number((value[key] * quantity).toFixed(2))]),
   ) as unknown as Nutrients
-}
-
-export function makeDailyTarget(gender: Gender, activity: Activity): NutritionTarget {
-  const profile = profileTargets[gender]
-  const dayKcal = Math.round(profile.dayKcal * activityOptions[activity].factor)
-  return {
-    dayKcal,
-    kcal: dayKcal,
-    carbs: Math.round((dayKcal * 0.58) / 4),
-    protein: profile.protein,
-    fat: Math.round((dayKcal * 0.24) / 9),
-    sodium: 2000,
-    calcium: profile.calcium,
-    iron: profile.iron,
-  }
-}
-
-export function makeLunchTarget(gender: Gender, activity: Activity): NutritionTarget {
-  const daily = makeDailyTarget(gender, activity)
-  const ratio = 0.34
-  return {
-    dayKcal: daily.dayKcal,
-    kcal: Math.round(daily.kcal * ratio),
-    carbs: Math.round(daily.carbs * ratio),
-    protein: Math.round(daily.protein * ratio),
-    fat: Math.round(daily.fat * ratio),
-    sodium: 650,
-    calcium: Math.round(daily.calcium * ratio),
-    iron: Number((daily.iron * ratio).toFixed(1)),
-  }
 }
 
 export function nutrientPercent(value: number, target: number) {
