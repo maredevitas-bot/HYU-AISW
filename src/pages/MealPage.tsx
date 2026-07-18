@@ -258,7 +258,10 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
   }, [mealDate, selectedSchool])
 
   const saveMeal = useCallback(async () => {
-    if (!selectedSchool || !isLiveMeal) return
+    if (!selectedSchool || !isLiveMeal) {
+      setStatus('현재 급식판은 예시입니다. 학교를 검색한 뒤 급식이 있는 날짜를 조회하면 기록할 수 있습니다.')
+      return
+    }
     setStatus('푸드 캘린더에 저장 중')
     try {
       await saveFoodLog({
@@ -296,7 +299,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           <h1 id="meal-title">급식 영양과 섭취량</h1>
           <p>학교 급식표를 불러와 영양소를 비교하고, 실제로 먹을 양을 판단합니다.</p>
         </div>
-        <button className="primary-button" type="button" onClick={saveMeal} disabled={!isLiveMeal}>담은 급식 기록</button>
+        <button className={isLiveMeal ? 'primary-button' : 'secondary-button'} type="button" onClick={saveMeal}>{isLiveMeal ? '담은 급식 기록' : '급식 조회 후 기록'}</button>
       </header>
 
       <div className="two-column-layout">
