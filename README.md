@@ -69,11 +69,13 @@ Node.js 22.13 이상 서버 기준으로 배포합니다. Render 같은 Node Web
 
 - Build Command: `npm install && npm run build && npm run db:sync`
 - Start Command: `npm start`
-- Environment Variables: `NEIS_API_KEY`, `PUBLIC_DATA_API_KEY`, 선택적으로 `DATABASE_PATH`, `FOODSAFETY_API_KEY`, `APP_USER_AGENT`
+- Environment Variables: `NEIS_API_KEY`, `PUBLIC_DATA_API_KEY`, 선택적으로 `DATABASE_PATH`, `FOODSAFETY_API_KEY`, `FOODSAFETY_PRIORITY_MS`, `APP_USER_AGENT`
 
 `npm start`는 빌드된 `dist` 파일과 API 서버를 함께 제공하므로, 웹상에서도 급식 조회, 바코드 조회, 분리배출 조회가 같은 주소에서 동작합니다.
 
 Render 재배포 뒤에도 제품 조회 캐시를 유지하려면 Persistent Disk를 연결하고 `DATABASE_PATH`를 해당 디스크 경로로 지정합니다. 디스크가 없어도 빌드 과정에서 HACCP 전체 공개데이터 DB를 다시 생성하며, 동기화 요청은 일시적인 API 실패 시 최대 3회 재시도합니다. 푸드 캘린더 기록은 브라우저에 저장되므로 서버 디스크와 무관합니다.
+
+`FOODSAFETY_PRIORITY_MS`는 느린 식품안전나라 보조 조회를 화면에서 우선 기다리는 시간이며 기본값은 1800ms입니다. 이 시간을 넘기면 글로벌 보조 DB 결과를 먼저 표시하고, 식품안전나라 조회가 뒤늦게 성공한 경우 국내 결과를 서버 캐시에 저장해 다음 조회에 사용합니다.
 
 ## 페이지와 식단 기록
 

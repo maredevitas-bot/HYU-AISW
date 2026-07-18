@@ -33,6 +33,10 @@ const config = {
   publicDataKey: process.env.PUBLIC_DATA_API_KEY ?? process.env.WASTE_API_KEY ?? 'YOUR_PUBLIC_DATA_API_KEY',
   wasteKey: process.env.WASTE_API_KEY ?? process.env.PUBLIC_DATA_API_KEY ?? 'YOUR_WASTE_API_KEY',
   appUserAgent: process.env.APP_USER_AGENT ?? 'NutriCycle/1.0 (student contest prototype)',
+  foodSafetyPriorityMs: (() => {
+    const value = Number(process.env.FOODSAFETY_PRIORITY_MS ?? 1800)
+    return Number.isFinite(value) ? Math.max(500, Math.min(4000, value)) : 1800
+  })(),
 }
 
 const wasteItemCache = new Map()
@@ -287,6 +291,10 @@ async function queryFoodSafety(serviceId, filters) {
     }
   }
   return { rows: [], error: lastError }
+}
+
+function delay(ms) {
+  return new Promise((resolvePromise) => setTimeout(resolvePromise, ms))
 }
 
 function asArray(value) {
@@ -947,6 +955,48 @@ function buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Rows) {
   }
 }
 
+async function queryFoodSafetyProduct(barcode) {
+  const diagnostics = []
+  const [c005Result, i2570Result] = await Promise.all([
+    queryFoodSafety('C005', { BAR_CD: barcode }),
+    queryFoodSafety('I2570', { BRCD_NO: barcode }),
+  ])
+  diagnostics.push({ source: 'C005', count: c005Result.rows.length, error: c005Result.error })
+  diagnostics.push({ source: 'I2570', count: i2570Result.rows.length, error: i2570Result.error })
+
+  const c005 = c005Result.rows[0]
+  const i2570 = i2570Result.rows[0]
+  const reportNo = firstText(c005?.PRDLST_REPORT_NO, i2570?.PRDLST_REPORT_NO)
+  const [i1250Result, c002Result] = reportNo
+    ? await Promise.all([
+        queryFoodSafety('I1250', { PRDLST_REPORT_NO: reportNo }),
+        queryFoodSafety('C002', { PRDLST_REPORT_NO: reportNo }),
+      ])
+    : [{ rows: [], error: '' }, { rows: [], error: '' }]
+
+  diagnostics.push({ source: 'I1250', count: i1250Result.rows.length, error: i1250Result.error })
+  diagnostics.push({ source: 'C002', count: c002Result.rows.length, error: c002Result.error })
+  const i1250 = i1250Result.rows[0]
+
+  return {
+    product: c005 || i2570 || i1250
+      ? buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Result.rows)
+      : null,
+    diagnostics,
+  }
+}
+
+function cacheLateFoodSafetyProduct(barcode, promise) {
+  if (!promise) return
+  void promise
+    .then(async (result) => {
+      if (!result.product) return
+      const product = await enrichProductRecycling(result.product)
+      saveProductCache(barcode, product, productCacheHours(product))
+    })
+    .catch(() => undefined)
+}
+
 function buildOpenFoodFactsProduct(barcode, product) {
   const packagingText = firstText(product.packaging, product.packagings?.map?.((item) => firstText(item.material, item.shape)).join(', '))
   const packageParts = packagePartsFromMaterial(packagingText)
@@ -1186,30 +1236,30 @@ async function handleBarcode(req, res, barcode) {
 
   diagnostics.push({ source: 'HACCP 공개데이터 DB', count: 0, error: '' })
 
-  const [c005Result, i2570Result] = await Promise.all([
-    queryFoodSafety('C005', { BAR_CD: normalized }),
-    queryFoodSafety('I2570', { BRCD_NO: normalized }),
+  const openFoodFactsPromise = freshCache ? null : queryOpenFoodFacts(normalized)
+  const foodSafetyPromise = queryFoodSafetyProduct(normalized)
+  const foodSafetyRace = await Promise.race([
+    foodSafetyPromise.then((result) => ({ timedOut: false, result })),
+    delay(config.foodSafetyPriorityMs).then(() => ({ timedOut: true, result: null })),
   ])
-  diagnostics.push({ source: 'C005', count: c005Result.rows.length, error: c005Result.error })
-  const c005 = c005Result.rows[0]
-  diagnostics.push({ source: 'I2570', count: i2570Result.rows.length, error: i2570Result.error })
-  const i2570 = i2570Result.rows[0]
-  const reportNo = firstText(c005?.PRDLST_REPORT_NO, i2570?.PRDLST_REPORT_NO)
 
-  const [i1250Result, c002Result] = reportNo
-    ? await Promise.all([
-        queryFoodSafety('I1250', { PRDLST_REPORT_NO: reportNo }),
-        queryFoodSafety('C002', { PRDLST_REPORT_NO: reportNo }),
-      ])
-    : [{ rows: [], error: '' }, { rows: [], error: '' }]
-  diagnostics.push({ source: 'I1250', count: i1250Result.rows.length, error: i1250Result.error })
-  const i1250 = i1250Result.rows[0]
-  diagnostics.push({ source: 'C002', count: c002Result.rows.length, error: c002Result.error })
+  if (!foodSafetyRace.timedOut) {
+    diagnostics.push(...foodSafetyRace.result.diagnostics)
+  }
 
-  if (c005 || i2570 || i1250) {
-    const product = await enrichProductRecycling(buildFoodSafetyProduct(normalized, c005, i2570, i1250, c002Result.rows))
+  if (foodSafetyRace.result?.product) {
+    const product = await enrichProductRecycling(foodSafetyRace.result.product)
     sendFoundProduct(res, normalized, product, diagnostics)
     return
+  }
+
+  const lateFoodSafetyPromise = foodSafetyRace.timedOut ? foodSafetyPromise : null
+  if (foodSafetyRace.timedOut) {
+    diagnostics.push({
+      source: '식품안전나라 보조 조회',
+      count: 0,
+      error: '응답 지연으로 백그라운드 확인 중',
+    })
   }
 
   if (freshCache?.product?.nutritionBasis && Array.isArray(freshCache.product.availableNutrients)) {
@@ -1222,14 +1272,16 @@ async function handleBarcode(req, res, barcode) {
       { source: '국내 공공데이터 우선 재조회', count: 0, error: '' },
       { source: '글로벌 커뮤니티 캐시', count: 1, error: '' },
     ], false)
+    cacheLateFoodSafetyProduct(normalized, lateFoodSafetyPromise)
     return
   }
 
-  const openFoodFactsProduct = await queryOpenFoodFacts(normalized)
+  const openFoodFactsProduct = await openFoodFactsPromise
 
   if (openFoodFactsProduct) {
     const product = await enrichProductRecycling(openFoodFactsProduct)
     sendFoundProduct(res, normalized, product, [...diagnostics, { source: 'Open Food Facts', count: 1, error: '' }])
+    cacheLateFoodSafetyProduct(normalized, lateFoodSafetyPromise)
     return
   }
 
@@ -1242,6 +1294,7 @@ async function handleBarcode(req, res, barcode) {
       { source: 'Open Food Facts', count: 0, error: '' },
       { source: 'UPCitemdb', count: 1, error: '' },
     ])
+    cacheLateFoodSafetyProduct(normalized, lateFoodSafetyPromise)
     return
   }
 
@@ -1255,6 +1308,7 @@ async function handleBarcode(req, res, barcode) {
       { source: 'UPCitemdb', count: 0, error: upcItemDbResult.error },
       { source: '서버 DB 캐시', count: 1, error: '' },
     ], false)
+    cacheLateFoodSafetyProduct(normalized, lateFoodSafetyPromise)
     return
   }
 
@@ -1272,6 +1326,7 @@ async function handleBarcode(req, res, barcode) {
       { source: 'UPCitemdb', count: 0, error: upcItemDbResult.error },
     ],
   })
+  cacheLateFoodSafetyProduct(normalized, lateFoodSafetyPromise)
 }
 
 async function handleRecycling(req, res) {
