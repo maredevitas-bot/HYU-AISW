@@ -17,7 +17,7 @@ import {
   nutritionBasisFromValues,
   openFoodFactsNutrition,
 } from './product-nutrition.mjs'
-import { isCommunityProduct, productCacheHours } from './source-policy.mjs'
+import { isCommunityProduct, productCacheHours, shouldRetryFoodSafety } from './source-policy.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const rootDir = resolve(__dirname)
@@ -35,6 +35,7 @@ const config = {
 }
 
 const wasteItemCache = new Map()
+const foodSafetyCooldowns = new Map()
 
 const contentTypes = {
   '.html': 'text/html; charset=utf-8',
@@ -268,15 +269,24 @@ async function queryFoodSafety(serviceId, filters) {
     return { rows: [], error: '식약처 API 키가 설정되지 않았습니다.' }
   }
 
+  const cooldownUntil = foodSafetyCooldowns.get(serviceId) ?? 0
+  if (cooldownUntil > Date.now()) {
+    return { rows: [], error: '최근 시간초과로 잠시 건너뜀' }
+  }
+
   let lastError = ''
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
-      const payload = await fetchJson(foodSafetyUrl(serviceId, filters), { timeoutMs: 6500 })
+      const payload = await fetchJson(foodSafetyUrl(serviceId, filters), { timeoutMs: 4500 })
       return { rows: foodSafetyRows(payload, serviceId), error: '' }
     } catch (error) {
       lastError = error instanceof Error ? error.message : String(error)
       const timedOut = error instanceof Error && (error.name === 'AbortError' || /aborted|timeout/i.test(error.message))
-      if (!timedOut || attempt === 1) break
+      if (timedOut) {
+        foodSafetyCooldowns.set(serviceId, Date.now() + 10 * 60 * 1000)
+        break
+      }
+      if (!shouldRetryFoodSafety(lastError) || attempt === 1) break
     }
   }
   return { rows: [], error: lastError }
