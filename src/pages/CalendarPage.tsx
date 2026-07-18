@@ -3,14 +3,11 @@ import { loadFoodLog, removeFoodLog, saveFoodLog, type FoodLogEntry } from '../f
 import {
   emptyNutrients,
   formatNutrient,
-  makeDailyTarget,
   nutrientMeta,
-  nutrientPercent,
   sumNutrients,
   todayInputValue,
   type Activity,
   type Gender,
-  type Nutrients,
 } from '../nutrition'
 
 type CalendarPageProps = {
@@ -43,19 +40,11 @@ function monthCells(month: string) {
   ]
 }
 
-function statusFor(total: Nutrients, target: Nutrients) {
-  const over = total.kcal > target.kcal * 1.15 || total.sodium > target.sodium || total.fat > target.fat * 1.2
-  const low = total.kcal < target.kcal * 0.8 || total.protein < target.protein * 0.8 || total.calcium < target.calcium * 0.8
-  if (over) return 'over'
-  if (low) return 'low'
-  return 'balanced'
-}
-
 function hasNutrition(entry: FoodLogEntry) {
   return nutrientMeta.some(({ key }) => entry.nutrients[key] > 0)
 }
 
-export default function CalendarPage({ ownerId, gender, activity, refreshKey }: CalendarPageProps) {
+export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps) {
   const today = todayInputValue()
   const [month, setMonth] = useState(monthValue(today))
   const [selectedDate, setSelectedDate] = useState(today)
@@ -80,22 +69,11 @@ export default function CalendarPage({ ownerId, gender, activity, refreshKey }: 
   const dailyNutritionEntries = useMemo(() => dailyEntries.filter(hasNutrition), [dailyEntries])
   const dailyTotal = useMemo(() => sumNutrients(dailyNutritionEntries.map((entry) => entry.nutrients)), [dailyNutritionEntries])
   const manualEntryCount = dailyEntries.length - dailyNutritionEntries.length
-  const target = useMemo(() => makeDailyTarget(gender, activity), [activity, gender])
   const cells = useMemo(() => monthCells(month), [month])
   const byDate = useMemo(() => entries.reduce<Record<string, FoodLogEntry[]>>((groups, entry) => {
     groups[entry.date] = [...(groups[entry.date] ?? []), entry]
     return groups
   }, {}), [entries])
-
-  const assessments = nutrientMeta.map(({ key, label, unit }) => {
-    const ratio = target[key] > 0 ? dailyTotal[key] / target[key] : 0
-    const state = key === 'sodium'
-      ? (ratio > 1 ? 'over' : 'balanced')
-      : ratio > 1.15 ? 'over' : ratio < 0.8 ? 'low' : 'balanced'
-    return { key, label, unit, state, ratio }
-  })
-  const excessive = assessments.filter((item) => item.state === 'over').map((item) => item.label)
-  const insufficient = assessments.filter((item) => item.state === 'low').map((item) => item.label)
 
   const changeMonth = (nextMonth: string) => {
     setMonth(nextMonth)
@@ -141,7 +119,7 @@ export default function CalendarPage({ ownerId, gender, activity, refreshKey }: 
   return (
     <section className="page-stack" aria-labelledby="calendar-title">
       <header className="page-heading">
-        <div><span>하루 식단 노트</span><h1 id="calendar-title">푸드 캘린더</h1><p>급식과 스캔 식품을 날짜별로 합산해 지금까지의 과다·부족 영양소를 확인합니다.</p></div>
+        <div><span>하루 식단 노트</span><h1 id="calendar-title">푸드 캘린더</h1><p>급식과 스캔 식품을 날짜별로 기록하고, 영양 정보가 있는 항목의 합계를 확인합니다.</p></div>
         <div className="month-controls"><button type="button" aria-label="이전 달" onClick={() => changeMonth(moveMonth(month, -1))}>‹</button><input aria-label="조회할 달" type="month" value={month} onChange={(event) => changeMonth(event.target.value)} /><button type="button" aria-label="다음 달" onClick={() => changeMonth(moveMonth(month, 1))}>›</button></div>
       </header>
 
@@ -155,11 +133,10 @@ export default function CalendarPage({ ownerId, gender, activity, refreshKey }: 
               const dayEntries = byDate[date] ?? []
               const nutritionEntries = dayEntries.filter(hasNutrition)
               const total = sumNutrients(nutritionEntries.map((entry) => entry.nutrients))
-              const dayStatus = nutritionEntries.length ? statusFor(total, target) : dayEntries.length ? 'noted' : 'empty'
               return (
                 <button className={`calendar-day ${selectedDate === date ? 'selected' : ''}`} key={date} type="button" onClick={() => setSelectedDate(date)}>
                   <span>{Number(date.slice(-2))}</span>
-                  {dayEntries.length > 0 && <><strong>{nutritionEntries.length ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : `${dayEntries.length}개 기록`}</strong><em className={dayStatus}>{dayStatus === 'over' ? '과다' : dayStatus === 'low' ? '부족' : dayStatus === 'noted' ? '메모' : '적정'}</em></>}
+                  {dayEntries.length > 0 && <><strong>{nutritionEntries.length ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : '영양 정보 없음'}</strong><em className="logged">기록 {dayEntries.length}개</em></>}
                 </button>
               )
             })}
@@ -168,15 +145,11 @@ export default function CalendarPage({ ownerId, gender, activity, refreshKey }: 
 
         <div className="page-stack compact">
           <article className="panel daily-summary">
-            <div className="panel-heading"><span>{selectedDate}</span><h2>오늘의 영양 판정</h2></div>
+            <div className="panel-heading"><span>{selectedDate}</span><h2>기록된 영양소 합계</h2></div>
             {dailyNutritionEntries.length > 0 ? <>
-              <div className="summary-callouts">
-                <div className={excessive.length ? 'summary-callout over' : 'summary-callout balanced'}><span>과도한 영양소</span><strong>{excessive.length ? excessive.join(', ') : '없음'}</strong></div>
-                <div className={insufficient.length ? 'summary-callout low' : 'summary-callout balanced'}><span>부족한 영양소</span><strong>{insufficient.length ? insufficient.join(', ') : '없음'}</strong></div>
-              </div>
-              <p className="summary-note">영양 정보가 있는 기록만 합산한 결과입니다.{manualEntryCount > 0 ? ` 성분을 알 수 없는 직접 기록 ${manualEntryCount}개는 판정에서 제외했습니다.` : ''}</p>
-              <div className="nutrient-list">{assessments.map(({ key, label, unit, state }) => <div className={`nutrient-row ${state}`} key={key}><div><strong>{label}</strong><span>{formatNutrient(dailyTotal[key], unit)} / {formatNutrient(target[key], unit)}</span></div><div className="meter" aria-label={`${label} ${nutrientPercent(dailyTotal[key], target[key])}%`}><span style={{ width: `${nutrientPercent(dailyTotal[key], target[key])}%` }} /></div></div>)}</div>
-            </> : dailyEntries.length > 0 ? <div className="unknown-nutrition-state"><strong>음식 이름만 기록되어 있습니다.</strong><p>정확한 성분을 알 수 없어 영양 합계와 과다·부족 판정에서는 제외했습니다.</p></div> : <p className="empty-state">선택한 날짜에 저장된 음식이 없습니다. 아래에서 음식 이름을 직접 기록할 수 있습니다.</p>}
+              <p className="summary-note">캘린더에 기록된 항목 중 영양 정보가 제공된 항목만 합산했습니다. 하루 전체 섭취량이나 영양 상태를 판정하는 값은 아닙니다.{manualEntryCount > 0 ? ` 성분을 알 수 없는 직접 기록 ${manualEntryCount}개는 합계에 포함하지 않았습니다.` : ''}</p>
+              <div className="nutrient-list recorded-nutrient-list">{nutrientMeta.map(({ key, label, unit }) => <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{formatNutrient(dailyTotal[key], unit)}</span></div></div>)}</div>
+            </> : dailyEntries.length > 0 ? <div className="unknown-nutrition-state"><strong>음식 이름만 기록되어 있습니다.</strong><p>정확한 성분을 알 수 없어 영양 합계에는 포함하지 않았습니다.</p></div> : <p className="empty-state">선택한 날짜에 저장된 음식이 없습니다. 아래에서 음식 이름을 직접 기록할 수 있습니다.</p>}
           </article>
 
           <article className="panel">
