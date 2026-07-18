@@ -54,6 +54,25 @@ database.exec(`
   CREATE INDEX IF NOT EXISTS idx_lookup_events_created_at
     ON lookup_events(created_at);
 
+  CREATE TABLE IF NOT EXISTS food_log_entries (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    owner_id TEXT NOT NULL,
+    entry_date TEXT NOT NULL,
+    entry_key TEXT NOT NULL,
+    source TEXT NOT NULL,
+    meal_type TEXT NOT NULL,
+    name TEXT NOT NULL,
+    quantity REAL NOT NULL DEFAULT 1,
+    nutrients_json TEXT NOT NULL,
+    metadata_json TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    UNIQUE(owner_id, entry_date, entry_key)
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_food_log_owner_date
+    ON food_log_entries(owner_id, entry_date);
+
   CREATE TABLE IF NOT EXISTS sync_state (
     source TEXT PRIMARY KEY,
     record_count INTEGER NOT NULL DEFAULT 0,
@@ -125,6 +144,43 @@ const saveSyncStateStatement = database.prepare(`
     completed_at = excluded.completed_at
 `)
 
+const upsertFoodLogStatement = database.prepare(`
+  INSERT INTO food_log_entries (
+    owner_id, entry_date, entry_key, source, meal_type, name, quantity,
+    nutrients_json, metadata_json, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  ON CONFLICT(owner_id, entry_date, entry_key) DO UPDATE SET
+    source = excluded.source,
+    meal_type = excluded.meal_type,
+    name = excluded.name,
+    quantity = excluded.quantity,
+    nutrients_json = excluded.nutrients_json,
+    metadata_json = excluded.metadata_json,
+    updated_at = excluded.updated_at
+`)
+
+const getFoodLogEntryStatement = database.prepare(`
+  SELECT * FROM food_log_entries
+  WHERE owner_id = ? AND entry_date = ? AND entry_key = ?
+`)
+
+const listFoodLogByMonthStatement = database.prepare(`
+  SELECT * FROM food_log_entries
+  WHERE owner_id = ? AND entry_date >= ? AND entry_date < ?
+  ORDER BY entry_date ASC, created_at ASC, id ASC
+`)
+
+const listFoodLogByDateStatement = database.prepare(`
+  SELECT * FROM food_log_entries
+  WHERE owner_id = ? AND entry_date = ?
+  ORDER BY created_at ASC, id ASC
+`)
+
+const deleteFoodLogStatement = database.prepare(`
+  DELETE FROM food_log_entries
+  WHERE id = ? AND owner_id = ?
+`)
+
 function text(value) {
   return String(value ?? '').trim()
 }
@@ -139,6 +195,24 @@ function parseJson(value) {
     return JSON.parse(value)
   } catch {
     return null
+  }
+}
+
+function foodLogRow(row) {
+  if (!row) return null
+  return {
+    id: Number(row.id),
+    ownerId: row.owner_id,
+    date: row.entry_date,
+    entryKey: row.entry_key,
+    source: row.source,
+    mealType: row.meal_type,
+    name: row.name,
+    quantity: Number(row.quantity),
+    nutrients: parseJson(row.nutrients_json) ?? {},
+    metadata: parseJson(row.metadata_json) ?? {},
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
   }
 }
 
@@ -238,6 +312,40 @@ export function saveSyncState({ recordCount, lastPage, totalPages, completed = f
   saveSyncStateStatement.run('haccp', recordCount, lastPage, totalPages, now, completed ? now : null)
 }
 
+export function saveFoodLogEntry(entry) {
+  const now = new Date().toISOString()
+  upsertFoodLogStatement.run(
+    text(entry.ownerId),
+    text(entry.date),
+    text(entry.entryKey),
+    text(entry.source),
+    text(entry.mealType),
+    text(entry.name),
+    Number(entry.quantity),
+    JSON.stringify(entry.nutrients ?? {}),
+    JSON.stringify(entry.metadata ?? {}),
+    now,
+    now,
+  )
+  return foodLogRow(getFoodLogEntryStatement.get(text(entry.ownerId), text(entry.date), text(entry.entryKey)))
+}
+
+export function listFoodLogEntries(ownerId, { month, date } = {}) {
+  if (date) {
+    return listFoodLogByDateStatement.all(text(ownerId), text(date)).map(foodLogRow)
+  }
+
+  const start = `${text(month)}-01`
+  const [year, monthNumber] = text(month).split('-').map(Number)
+  const nextMonth = new Date(Date.UTC(year, monthNumber, 1)).toISOString().slice(0, 7)
+  return listFoodLogByMonthStatement.all(text(ownerId), start, `${nextMonth}-01`).map(foodLogRow)
+}
+
+export function deleteFoodLogEntry(id, ownerId) {
+  const result = deleteFoodLogStatement.run(Number(id), text(ownerId))
+  return Number(result.changes) > 0
+}
+
 export function getDatabaseStats() {
   const haccp = database.prepare(`
     SELECT COUNT(*) AS total, COUNT(barcode) AS with_barcode, MAX(synced_at) AS latest
@@ -245,6 +353,7 @@ export function getDatabaseStats() {
   `).get()
   const cache = database.prepare('SELECT COUNT(*) AS total, MAX(updated_at) AS latest FROM product_cache').get()
   const lookups = database.prepare('SELECT COUNT(*) AS total FROM lookup_events').get()
+  const foodLog = database.prepare('SELECT COUNT(*) AS total, COUNT(DISTINCT owner_id) AS owners FROM food_log_entries').get()
   const sync = database.prepare("SELECT * FROM sync_state WHERE source = 'haccp'").get()
 
   return {
@@ -255,7 +364,8 @@ export function getDatabaseStats() {
     cachedProducts: Number(cache?.total ?? 0),
     cacheLatest: cache?.latest ?? null,
     lookupEvents: Number(lookups?.total ?? 0),
+    foodLogEntries: Number(foodLog?.total ?? 0),
+    foodLogOwners: Number(foodLog?.owners ?? 0),
     sync: sync ?? null,
   }
 }
-

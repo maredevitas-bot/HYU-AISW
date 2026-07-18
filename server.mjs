@@ -3,10 +3,13 @@ import { createServer } from 'node:http'
 import { extname, join, normalize, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import {
+  deleteFoodLogEntry,
   findCachedProduct,
   findHaccpProductByBarcode,
   getDatabaseStats,
+  listFoodLogEntries,
   logBarcodeLookup,
+  saveFoodLogEntry,
   saveProductCache,
 } from './database.mjs'
 
@@ -49,8 +52,86 @@ function sendError(res, status, message, detail) {
   sendJson(res, status, { ok: false, message, detail })
 }
 
+async function readJsonBody(req, limit = 64 * 1024) {
+  const chunks = []
+  let size = 0
+
+  for await (const chunk of req) {
+    size += chunk.length
+    if (size > limit) throw new Error('요청 데이터가 너무 큽니다.')
+    chunks.push(chunk)
+  }
+
+  if (chunks.length === 0) return {}
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'))
+}
+
 function cleanBarcode(value) {
   return String(value ?? '').replace(/\D/g, '')
+}
+
+const nutrientKeys = ['kcal', 'carbs', 'protein', 'fat', 'sodium', 'calcium', 'iron']
+const foodLogSources = new Set(['meal', 'barcode', 'manual'])
+const mealTypes = new Set(['breakfast', 'lunch', 'dinner', 'snack'])
+
+function validOwnerId(value) {
+  return /^[a-zA-Z0-9_-]{12,80}$/.test(String(value ?? ''))
+}
+
+function validDate(value) {
+  const text = String(value ?? '')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return false
+  const parsed = new Date(`${text}T00:00:00Z`)
+  return !Number.isNaN(parsed.getTime()) && parsed.toISOString().slice(0, 10) === text
+}
+
+function validMonth(value) {
+  const text = String(value ?? '')
+  if (!/^\d{4}-\d{2}$/.test(text)) return false
+  const [, month] = text.split('-').map(Number)
+  return month >= 1 && month <= 12
+}
+
+function normalizedNutrients(value) {
+  const source = value && typeof value === 'object' ? value : {}
+  return Object.fromEntries(nutrientKeys.map((key) => {
+    const number = Number(source[key] ?? 0)
+    return [key, Number.isFinite(number) ? Math.max(0, Math.min(number, 100000)) : 0]
+  }))
+}
+
+function validateFoodLogEntry(body) {
+  const ownerId = String(body?.ownerId ?? '').trim()
+  const date = String(body?.date ?? '').trim()
+  const entryKey = String(body?.entryKey ?? '').trim().slice(0, 160)
+  const source = String(body?.source ?? '').trim()
+  const mealType = String(body?.mealType ?? '').trim()
+  const name = String(body?.name ?? '').trim().slice(0, 120)
+  const quantity = Number(body?.quantity ?? 1)
+
+  if (!validOwnerId(ownerId)) throw new Error('올바른 사용자 식별자가 필요합니다.')
+  if (!validDate(date)) throw new Error('올바른 기록 날짜가 필요합니다.')
+  if (!entryKey) throw new Error('기록 식별자가 필요합니다.')
+  if (!foodLogSources.has(source)) throw new Error('지원하지 않는 기록 출처입니다.')
+  if (!mealTypes.has(mealType)) throw new Error('지원하지 않는 식사 구분입니다.')
+  if (!name) throw new Error('음식 이름이 필요합니다.')
+  if (!Number.isFinite(quantity) || quantity <= 0 || quantity > 50) throw new Error('섭취량은 0보다 크고 50 이하여야 합니다.')
+
+  const metadata = body?.metadata && typeof body.metadata === 'object' && !Array.isArray(body.metadata)
+    ? body.metadata
+    : {}
+
+  return {
+    ownerId,
+    date,
+    entryKey,
+    source,
+    mealType,
+    name,
+    quantity,
+    nutrients: normalizedNutrients(body?.nutrients),
+    metadata,
+  }
 }
 
 async function fetchJson(url, options = {}) {
@@ -1102,8 +1183,74 @@ async function handleRecycling(req, res) {
   })
 }
 
+async function handleFoodLog(req, res, entryId = '') {
+  const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+
+  if (req.method === 'GET' && !entryId) {
+    const ownerId = url.searchParams.get('ownerId')?.trim() ?? ''
+    const month = url.searchParams.get('month')?.trim() ?? ''
+    const date = url.searchParams.get('date')?.trim() ?? ''
+
+    if (!validOwnerId(ownerId)) {
+      sendError(res, 400, '올바른 사용자 식별자가 필요합니다.')
+      return
+    }
+    if (date && !validDate(date)) {
+      sendError(res, 400, '날짜 형식은 YYYY-MM-DD여야 합니다.')
+      return
+    }
+    if (!date && !validMonth(month)) {
+      sendError(res, 400, '월 형식은 YYYY-MM여야 합니다.')
+      return
+    }
+
+    sendJson(res, 200, {
+      ok: true,
+      entries: listFoodLogEntries(ownerId, date ? { date } : { month }),
+    })
+    return
+  }
+
+  if (req.method === 'POST' && !entryId) {
+    try {
+      const entry = validateFoodLogEntry(await readJsonBody(req))
+      sendJson(res, 200, { ok: true, entry: saveFoodLogEntry(entry) })
+    } catch (error) {
+      sendError(res, 400, error instanceof Error ? error.message : '식단 기록을 저장하지 못했습니다.')
+    }
+    return
+  }
+
+  if (req.method === 'DELETE' && entryId) {
+    const ownerId = url.searchParams.get('ownerId')?.trim() ?? ''
+    if (!validOwnerId(ownerId) || !/^\d+$/.test(entryId)) {
+      sendError(res, 400, '삭제할 기록 정보가 올바르지 않습니다.')
+      return
+    }
+
+    const deleted = deleteFoodLogEntry(Number(entryId), ownerId)
+    sendJson(res, deleted ? 200 : 404, {
+      ok: deleted,
+      message: deleted ? '식단 기록을 삭제했습니다.' : '식단 기록을 찾지 못했습니다.',
+    })
+    return
+  }
+
+  sendError(res, 405, '지원하지 않는 요청 방식입니다.')
+}
+
 async function handleApi(req, res) {
   const url = new URL(req.url ?? '/', `http://${req.headers.host}`)
+
+  if (url.pathname === '/api/food-log') {
+    await handleFoodLog(req, res)
+    return true
+  }
+
+  if (url.pathname.startsWith('/api/food-log/')) {
+    await handleFoodLog(req, res, decodeURIComponent(url.pathname.replace('/api/food-log/', '')))
+    return true
+  }
 
   if (url.pathname === '/api/school/search') {
     await handleSchoolSearch(req, res)
@@ -1134,6 +1281,8 @@ async function handleApi(req, res) {
       haccpLatest: stats.haccpLatest,
       cachedProducts: stats.cachedProducts,
       lookupEvents: stats.lookupEvents,
+      foodLogEntries: stats.foodLogEntries,
+      foodLogOwners: stats.foodLogOwners,
       sync: stats.sync,
     })
     return true
