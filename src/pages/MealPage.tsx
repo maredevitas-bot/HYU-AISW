@@ -352,7 +352,7 @@ export default function MealPage({ ownerId, gender, ageGroup, onGenderChange, on
             })}</div>
           </article>
           <article className="panel">
-            <div className="panel-heading"><span>영양 비교</span><h2>점심 목표 대비</h2></div>
+            <div className="panel-heading"><span>영양 비교</span><h2>점심 참고량 대비</h2></div>
             <div className="nutrient-list">{nutrientMeta.map(({ key, label, unit }) => {
               const available = !isLiveMeal || fullMealTotal[key] > 0
               return <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{available ? `약 ${formatNutrient(total[key], unit)} / ${formatNutrient(target[key], unit)}` : 'NEIS 미제공'}</span></div>{available && <div className="meter" aria-label={`${label} ${nutrientPercent(total[key], target[key])}%`}><span style={{ width: `${nutrientPercent(total[key], target[key])}%` }} /></div>}</div>
