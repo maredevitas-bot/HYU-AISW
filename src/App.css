@@ -765,6 +765,11 @@ button:disabled {
   color: #267a53;
 }
 
+.calendar-day .noted {
+  background: #f4f0ff;
+  color: #654b91;
+}
+
 .summary-callouts {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -796,6 +801,23 @@ button:disabled {
   line-height: 1.5;
 }
 
+.unknown-nutrition-state {
+  padding: 14px;
+  border: 1px solid #d9d2eb;
+  border-radius: 7px;
+  background: #faf8ff;
+}
+
+.unknown-nutrition-state strong {
+  color: #554174;
+}
+
+.unknown-nutrition-state p {
+  margin: 6px 0 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
 .nutrient-row.over .meter span {
   background: #c6513f;
 }
@@ -807,6 +829,48 @@ button:disabled {
 .food-entry-list {
   display: grid;
   gap: 9px;
+}
+
+.manual-food-form {
+  display: grid;
+  gap: 7px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid #d9d2eb;
+  border-radius: 7px;
+  background: #faf8ff;
+}
+
+.manual-food-form label {
+  display: grid;
+  gap: 7px;
+}
+
+.manual-food-form label > span {
+  color: var(--text-strong);
+  font-size: 0.82rem;
+  font-weight: 900;
+}
+
+.manual-food-form label > div {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  gap: 7px;
+}
+
+.manual-food-form input {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  padding: 0 10px;
+  background: white;
+  color: var(--text-strong);
+}
+
+.manual-food-form p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .food-entry {
