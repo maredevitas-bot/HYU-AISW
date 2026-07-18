@@ -9,12 +9,23 @@ import {
   nutrientMeta,
   nutrientPercent,
   profileTargets,
+  scaleNutrients,
+  sumNutrients,
   todayInputValue,
   type Activity,
   type Gender,
   type MealItem,
   type Nutrients,
 } from '../nutrition'
+
+type TrayCategory = 'rice' | 'soup' | 'main' | 'side' | 'dessert'
+
+type TrayDish = {
+  id: string
+  name: string
+  category: TrayCategory
+  nutrients?: Nutrients
+}
 
 type SchoolRow = {
   ATPT_OFCDC_SC_CODE: string
@@ -47,6 +58,66 @@ const sampleMealItems: MealItem[] = [
   { name: '시금치나물', amount: '반찬 1칸', note: '무기질', nutrients: { kcal: 38, carbs: 5, protein: 3, fat: 1, sodium: 180, calcium: 96, iron: 2.2 } },
   { name: '우유', amount: '200mL', note: '칼슘', nutrients: { kcal: 130, carbs: 10, protein: 6, fat: 7, sodium: 95, calcium: 220, iron: 0 } },
 ]
+
+const portionOptions = [
+  { value: 0, label: '안 먹음' },
+  { value: 0.5, label: '절반' },
+  { value: 1, label: '기본' },
+  { value: 1.5, label: '많이' },
+]
+
+const categoryLabels: Record<TrayCategory, string> = {
+  rice: '밥',
+  soup: '국·탕',
+  main: '주반찬',
+  side: '곁반찬',
+  dessert: '후식',
+}
+
+const categoryWeights: Record<TrayCategory, Nutrients> = {
+  rice: { kcal: 1.7, carbs: 3.2, protein: 0.5, fat: 0.2, sodium: 0.05, calcium: 0.2, iron: 0.5 },
+  soup: { kcal: 0.6, carbs: 0.4, protein: 0.7, fat: 0.5, sodium: 2.5, calcium: 0.8, iron: 0.7 },
+  main: { kcal: 1.6, carbs: 0.8, protein: 3, fat: 3, sodium: 1.8, calcium: 0.8, iron: 2 },
+  side: { kcal: 0.7, carbs: 0.7, protein: 0.5, fat: 0.6, sodium: 1, calcium: 1.2, iron: 1.2 },
+  dessert: { kcal: 0.8, carbs: 1, protein: 0.5, fat: 0.4, sodium: 0.3, calcium: 1.5, iron: 0.2 },
+}
+
+function classifyDish(name: string): TrayCategory {
+  if (/밥|라이스|죽|볶음밥/.test(name)) return 'rice'
+  if (/국|탕|찌개|전골|스프/.test(name)) return 'soup'
+  if (/우유|요구르트|요거트|과일|주스|귤|사과|수박|케이크|푸딩/.test(name)) return 'dessert'
+  if (/고기|닭|돼지|소고기|불고기|갈비|생선|고등어|두부|계란|달걀|돈가스|커틀렛|만두|오리|떡갈비|제육/.test(name)) return 'main'
+  return 'side'
+}
+
+function trayDishesFrom(items: MealItem[], live: boolean): TrayDish[] {
+  const source = live ? items.slice(1) : items
+  return source.map((item, index) => ({
+    id: `${index}:${item.name}`,
+    name: item.name,
+    category: classifyDish(item.name),
+    nutrients: live ? undefined : item.nutrients,
+  }))
+}
+
+function defaultPortions(dishes: TrayDish[]) {
+  return Object.fromEntries(dishes.map((dish) => [dish.id, 1]))
+}
+
+function estimateTrayNutrients(fullMeal: Nutrients, dishes: TrayDish[], portions: Record<string, number>, live: boolean): Nutrients {
+  if (!live) {
+    return sumNutrients(dishes.map((dish) => scaleNutrients(dish.nutrients ?? emptyNutrients(), portions[dish.id] ?? 1)))
+  }
+
+  return Object.fromEntries(nutrientMeta.map(({ key }) => {
+    const weightTotal = dishes.reduce((sum, dish) => sum + categoryWeights[dish.category][key], 0)
+    const eaten = dishes.reduce((sum, dish) => {
+      const share = weightTotal > 0 ? categoryWeights[dish.category][key] / weightTotal : 0
+      return sum + fullMeal[key] * share * (portions[dish.id] ?? 1)
+    }, 0)
+    return [key, Number(eaten.toFixed(2))]
+  })) as unknown as Nutrients
+}
 
 function parseHtmlList(value?: string) {
   return (value ?? '')
@@ -119,11 +190,24 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
   const [mealDate, setMealDate] = useState(todayInputValue())
   const [mealPlan, setMealPlan] = useState<MealItem[]>(sampleMealItems)
   const [isLiveMeal, setIsLiveMeal] = useState(false)
+  const [trayPortions, setTrayPortions] = useState<Record<string, number>>(() => defaultPortions(trayDishesFrom(sampleMealItems, false)))
   const [status, setStatus] = useState('학교와 날짜를 조회하면 NEIS 급식표를 불러옵니다.')
 
-  const total = useMemo(() => addMealNutrients(mealPlan), [mealPlan])
+  const trayDishes = useMemo(() => trayDishesFrom(mealPlan, isLiveMeal), [isLiveMeal, mealPlan])
+  const fullMealTotal = useMemo(() => isLiveMeal ? (mealPlan[0]?.nutrients ?? emptyNutrients()) : addMealNutrients(mealPlan), [isLiveMeal, mealPlan])
+  const total = useMemo(() => estimateTrayNutrients(fullMealTotal, trayDishes, trayPortions, isLiveMeal), [fullMealTotal, isLiveMeal, trayDishes, trayPortions])
   const target = useMemo(() => makeLunchTarget(gender, activity), [gender, activity])
   const advice = useMemo(() => servingAdvice(total, target), [total, target])
+
+  const setDishPortion = (dishId: string, portion: number) => {
+    setTrayPortions((current) => ({ ...current, [dishId]: portion }))
+  }
+
+  const showSampleTray = () => {
+    setIsLiveMeal(false)
+    setMealPlan(sampleMealItems)
+    setTrayPortions(defaultPortions(trayDishesFrom(sampleMealItems, false)))
+  }
 
   const searchSchools = useCallback(async () => {
     const keyword = schoolName.trim()
@@ -158,14 +242,17 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
       if (!response.ok || !payload.ok) throw new Error(payload.message ?? '급식 조회 실패')
       const row = payload.rows?.[0]
       if (!row) {
-        setIsLiveMeal(false)
+        showSampleTray()
         return setStatus('해당 날짜의 급식 정보가 없습니다.')
       }
-      setMealPlan(mealRowToItems(row))
+      const nextMealPlan = mealRowToItems(row)
+      const nextDishes = trayDishesFrom(nextMealPlan, true)
+      setMealPlan(nextMealPlan)
+      setTrayPortions(defaultPortions(nextDishes))
       setIsLiveMeal(true)
       setStatus(`${selectedSchool.SCHUL_NM} ${mealDate} 급식표를 불러왔습니다.`)
     } catch (error) {
-      setIsLiveMeal(false)
+      showSampleTray()
       setStatus(error instanceof Error ? error.message : '급식 조회 실패')
     }
   }, [mealDate, selectedSchool])
@@ -185,8 +272,13 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
         nutrients: total,
         metadata: {
           school: selectedSchool.SCHUL_NM,
-          dishes: mealPlan.slice(1).map((item) => item.name),
+          dishes: trayDishes.map((dish) => ({
+            name: dish.name,
+            category: categoryLabels[dish.category],
+            portion: trayPortions[dish.id] ?? 1,
+          })),
           source: 'NEIS 급식식단정보 API',
+          calculation: 'NEIS 메뉴 전체 영양량을 음식 종류와 사용자가 담은 양에 따라 나눈 추정치',
         },
       })
       onSaved()
@@ -194,7 +286,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '급식 기록 저장 실패')
     }
-  }, [isLiveMeal, mealDate, mealPlan, onSaved, ownerId, selectedSchool, total])
+  }, [isLiveMeal, mealDate, onSaved, ownerId, selectedSchool, total, trayDishes, trayPortions])
 
   return (
     <section className="page-stack" aria-labelledby="meal-title">
@@ -204,7 +296,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           <h1 id="meal-title">급식 영양과 섭취량</h1>
           <p>학교 급식표를 불러와 영양소를 비교하고, 실제로 먹을 양을 판단합니다.</p>
         </div>
-        <button className="primary-button" type="button" onClick={saveMeal} disabled={!isLiveMeal}>캘린더에 급식 기록</button>
+        <button className="primary-button" type="button" onClick={saveMeal} disabled={!isLiveMeal}>담은 급식 기록</button>
       </header>
 
       <div className="two-column-layout">
@@ -228,13 +320,26 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           <div className="api-tools">
             <label className="api-input"><span>학교명</span><div><input aria-label="학교명 검색" value={schoolName} onChange={(event) => setSchoolName(event.target.value)} /><button type="button" onClick={searchSchools}>검색</button></div></label>
             {schoolOptions.length > 0 && (
-              <label className="api-input"><span>학교 선택</span><select value={selectedSchool ? `${selectedSchool.ATPT_OFCDC_SC_CODE}:${selectedSchool.SD_SCHUL_CODE}` : ''} onChange={(event) => setSelectedSchool(schoolOptions.find((school) => `${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}` === event.target.value))}>{schoolOptions.map((school) => <option key={`${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}`} value={`${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}`}>{school.SCHUL_NM}{school.LCTN_SC_NM ? ` (${school.LCTN_SC_NM})` : ''}</option>)}</select></label>
+              <label className="api-input"><span>학교 선택</span><select value={selectedSchool ? `${selectedSchool.ATPT_OFCDC_SC_CODE}:${selectedSchool.SD_SCHUL_CODE}` : ''} onChange={(event) => { setSelectedSchool(schoolOptions.find((school) => `${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}` === event.target.value)); showSampleTray() }}>{schoolOptions.map((school) => <option key={`${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}`} value={`${school.ATPT_OFCDC_SC_CODE}:${school.SD_SCHUL_CODE}`}>{school.SCHUL_NM}{school.LCTN_SC_NM ? ` (${school.LCTN_SC_NM})` : ''}</option>)}</select></label>
             )}
-            <label className="api-input"><span>급식 날짜</span><div><input aria-label="급식 날짜 조회" type="date" value={mealDate} onChange={(event) => setMealDate(event.target.value)} /><button type="button" onClick={loadMeal}>조회</button></div></label>
+            <label className="api-input"><span>급식 날짜</span><div><input aria-label="급식 날짜 조회" type="date" value={mealDate} onChange={(event) => { setMealDate(event.target.value); showSampleTray() }} /><button type="button" onClick={loadMeal}>조회</button></div></label>
             <p className="api-status">{status}</p>
           </div>
 
-          <div className="meal-list">{mealPlan.map((item, index) => <div className="meal-row" key={`${item.name}-${index}`}><div><strong>{item.name}</strong><span>{item.amount}</span></div><em>{item.note}</em></div>)}</div>
+          <section className="meal-tray-section" aria-labelledby="meal-tray-title">
+            <div className="tray-heading"><div><span>{isLiveMeal ? '조회한 급식표' : '급식판 사용 예시'}</span><h3 id="meal-tray-title">급식판에 담은 양</h3></div><strong>{Math.round(total.kcal).toLocaleString('ko-KR')} kcal</strong></div>
+            <div className="meal-tray">
+              {trayDishes.map((dish) => (
+                <div className={`tray-compartment ${dish.category}`} key={dish.id}>
+                  <div className="tray-food"><span>{categoryLabels[dish.category]}</span><strong>{dish.name}</strong></div>
+                  <div className="portion-control" aria-label={`${dish.name} 담은 양`}>
+                    {portionOptions.map((option) => <button className={(trayPortions[dish.id] ?? 1) === option.value ? 'active' : ''} key={option.value} type="button" onClick={() => setDishPortion(dish.id, option.value)}>{option.label}</button>)}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <p className="tray-note">{isLiveMeal ? 'NEIS가 제공한 메뉴 전체 영양량을 음식 종류와 선택한 양에 따라 나눈 추정치입니다.' : '학교 급식 조회 후 실제 메뉴로 교체되며, 조회 전 예시는 캘린더에 저장되지 않습니다.'}</p>
+          </section>
         </article>
 
         <div className="page-stack compact">

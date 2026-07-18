@@ -848,6 +848,276 @@ button:disabled {
   font-size: 0.76rem;
 }
 
+.meal-tray-section {
+  margin-top: 18px;
+}
+
+.tray-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: end;
+  margin-bottom: 10px;
+}
+
+.tray-heading > div {
+  display: grid;
+  gap: 3px;
+}
+
+.tray-heading span {
+  color: var(--muted);
+  font-size: 0.76rem;
+  font-weight: 800;
+}
+
+.tray-heading h3 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1.18rem;
+  letter-spacing: 0;
+}
+
+.tray-heading > strong {
+  color: var(--accent);
+}
+
+.meal-tray {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 2px solid #aeb9b5;
+  border-radius: 8px;
+  background: #cdd5d2;
+  box-shadow: inset 0 1px 3px rgba(18, 32, 26, 0.18);
+}
+
+.tray-compartment {
+  display: grid;
+  grid-template-rows: minmax(72px, auto) auto;
+  gap: 8px;
+  min-width: 0;
+  padding: 9px;
+  border: 1px solid #a8b3af;
+  border-radius: 7px;
+  background: #f7faf8;
+  box-shadow: inset 0 0 0 2px #e4e9e6;
+}
+
+.tray-compartment.main {
+  grid-column: span 2;
+}
+
+.tray-compartment.rice,
+.tray-compartment.soup {
+  border-radius: 28px;
+}
+
+.tray-food {
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  min-width: 0;
+  padding: 5px;
+  text-align: center;
+}
+
+.tray-food span {
+  color: var(--accent);
+  font-size: 0.7rem;
+  font-weight: 900;
+}
+
+.tray-food strong {
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-size: 0.86rem;
+  line-height: 1.3;
+}
+
+.portion-control {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+}
+
+.portion-control button {
+  min-width: 0;
+  min-height: 30px;
+  padding: 3px;
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 0.64rem;
+}
+
+.portion-control button.active {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: white;
+}
+
+.tray-note {
+  margin: 9px 2px 0;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.45;
+}
+
+.add-today-button {
+  width: 100%;
+  margin-top: 16px;
+}
+
+.modal-backdrop {
+  position: fixed;
+  z-index: 1000;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(18, 32, 26, 0.58);
+}
+
+.log-dialog {
+  width: min(520px, 100%);
+  max-height: calc(100vh - 36px);
+  overflow-y: auto;
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 22px 60px rgba(18, 32, 26, 0.28);
+}
+
+.dialog-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+}
+
+.dialog-heading > div {
+  display: grid;
+  gap: 4px;
+}
+
+.dialog-heading span {
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 900;
+}
+
+.dialog-heading h2 {
+  margin: 0;
+  color: var(--text-strong);
+  font-size: 1.45rem;
+  line-height: 1.25;
+  letter-spacing: 0;
+}
+
+.dialog-heading > button {
+  flex: 0 0 36px;
+  min-height: 36px;
+  padding: 0;
+  font-size: 1.35rem;
+}
+
+.dialog-description {
+  margin: 12px 0;
+  color: var(--text);
+  line-height: 1.5;
+}
+
+.dialog-product {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: #f7faf8;
+}
+
+.dialog-product > div {
+  display: grid;
+  min-width: 0;
+}
+
+.dialog-product span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.dialog-product strong {
+  color: var(--text-strong);
+  overflow-wrap: anywhere;
+}
+
+.dialog-controls {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.dialog-controls label {
+  display: grid;
+  gap: 6px;
+}
+
+.dialog-controls label > span {
+  color: var(--text-strong);
+  font-size: 0.8rem;
+  font-weight: 800;
+}
+
+.dialog-controls select {
+  min-width: 0;
+  min-height: 42px;
+  border: 1px solid var(--border);
+  padding: 0 10px;
+  background: white;
+  color: var(--text-strong);
+}
+
+.dialog-nutrients {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: 12px;
+}
+
+.dialog-nutrients div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.dialog-nutrients span {
+  color: var(--muted);
+  font-size: 0.68rem;
+}
+
+.dialog-nutrients strong {
+  overflow-wrap: anywhere;
+  color: var(--text-strong);
+  font-size: 0.78rem;
+}
+
+.dialog-actions {
+  display: grid;
+  grid-template-columns: 0.8fr 1.2fr;
+  gap: 8px;
+  margin-top: 16px;
+}
+
 .product-nutrients div {
   display: grid;
   gap: 5px;
@@ -983,6 +1253,32 @@ button:disabled {
     grid-template-columns: 1fr auto;
     align-items: center;
     justify-items: start;
+  }
+
+  .meal-tray {
+    grid-template-columns: 1fr;
+    padding: 8px;
+  }
+
+  .tray-compartment.main {
+    grid-column: auto;
+  }
+
+  .tray-heading {
+    align-items: start;
+  }
+
+  .portion-control {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .dialog-controls,
+  .dialog-actions {
+    grid-template-columns: 1fr;
+  }
+
+  .dialog-nutrients {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .control-row,

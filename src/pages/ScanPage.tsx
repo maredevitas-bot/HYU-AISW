@@ -38,9 +38,9 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   const [selectedProduct, setSelectedProduct] = useState<Product>()
   const [scannerStatus, setScannerStatus] = useState('카메라 대기')
   const [isScanning, setIsScanning] = useState(false)
-  const [entryDate, setEntryDate] = useState(todayInputValue())
   const [mealType, setMealType] = useState<MealType>('snack')
   const [quantity, setQuantity] = useState(1)
+  const [showLogPrompt, setShowLogPrompt] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
@@ -80,13 +80,17 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
       if (!response.ok || !payload.ok) throw new Error(payload.message ?? '바코드 조회 실패')
       if (!payload.product) {
         setSelectedProduct(undefined)
+        setShowLogPrompt(false)
         return setScannerStatus(payload.message ?? '등록되지 않은 바코드입니다.')
       }
       setSelectedProduct(payload.product)
       setQuantity(1)
+      setMealType('snack')
+      setShowLogPrompt(true)
       setScannerStatus(`${payload.product.name} 조회 완료`)
     } catch (error) {
       setSelectedProduct(undefined)
+      setShowLogPrompt(false)
       setScannerStatus(error instanceof Error ? error.message : '바코드 조회 실패')
     } finally {
       stopScanner()
@@ -174,7 +178,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
     try {
       await saveFoodLog({
         ownerId,
-        date: entryDate,
+        date: todayInputValue(),
         entryKey: `barcode:${selectedProduct.barcode}:${Date.now()}`,
         source: 'barcode',
         mealType,
@@ -189,11 +193,12 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
         },
       })
       onSaved()
+      setShowLogPrompt(false)
       setScannerStatus(`${selectedProduct.name} 섭취 기록을 저장했습니다.`)
     } catch (error) {
       setScannerStatus(error instanceof Error ? error.message : '식품 기록 저장 실패')
     }
-  }, [entryDate, loggedNutrients, mealType, onSaved, ownerId, quantity, selectedProduct])
+  }, [loggedNutrients, mealType, onSaved, ownerId, quantity, selectedProduct])
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
@@ -222,12 +227,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
               <div className="product-nutrients">{nutrientMeta.slice(0, 6).map(({ key, label, unit }) => <div key={key}><strong>{formatNutrient(selectedProduct.nutrients[key], unit)}</strong><span>{label}</span></div>)}</div>
               <p className="product-advice">{selectedProduct.advice}</p>
               {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && <div className="detail-list"><strong>원재료</strong><p>{selectedProduct.ingredients.join(', ')}</p></div>}
-              <div className="log-controls">
-                <label><span>먹은 날짜</span><input type="date" value={entryDate} onChange={(event) => setEntryDate(event.target.value)} /></label>
-                <label><span>식사 구분</span><select value={mealType} onChange={(event) => setMealType(event.target.value as MealType)}><option value="breakfast">아침</option><option value="lunch">점심</option><option value="dinner">저녁</option><option value="snack">간식</option></select></label>
-                <label><span>포장 기준 섭취량</span><input type="number" min="0.25" max="10" step="0.25" value={quantity} onChange={(event) => setQuantity(Math.max(0.25, Math.min(10, Number(event.target.value) || 0.25)))} /></label>
-                <button className="primary-button" type="button" onClick={saveProduct}>캘린더에 섭취 기록</button>
-              </div>
+              <button className="primary-button add-today-button" type="button" onClick={() => setShowLogPrompt(true)}>오늘 푸드 캘린더에 추가</button>
             </> : <p className="empty-state">카메라로 바코드를 스캔하거나 번호를 입력하면 공공데이터에서 제품을 찾습니다.</p>}
           </article>
 
@@ -237,6 +237,25 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
           </article>
         </div>
       </div>
+
+      {showLogPrompt && selectedProduct && loggedNutrients && (
+        <div className="modal-backdrop">
+          <section className="log-dialog" role="dialog" aria-modal="true" aria-labelledby="food-log-dialog-title">
+            <div className="dialog-heading">
+              <div><span>오늘의 식단 노트</span><h2 id="food-log-dialog-title">{selectedProduct.name} 제품을 기록할까요?</h2></div>
+              <button type="button" aria-label="기록 창 닫기" onClick={() => setShowLogPrompt(false)}>×</button>
+            </div>
+            <p className="dialog-description">{todayInputValue()} 푸드 캘린더에 실제로 먹은 양만큼 영양소를 추가합니다.</p>
+            <div className="dialog-product"><div><strong>{selectedProduct.name}</strong><span>{selectedProduct.serving}</span></div><strong>{formatNutrient(loggedNutrients.kcal, 'kcal')}</strong></div>
+            <div className="dialog-controls">
+              <label><span>언제 먹었나요?</span><select value={mealType} onChange={(event) => setMealType(event.target.value as MealType)}><option value="breakfast">아침</option><option value="lunch">점심</option><option value="dinner">저녁</option><option value="snack">간식</option></select></label>
+              <label><span>포장 기준 얼마나 먹었나요?</span><select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}><option value="0.25">1/4</option><option value="0.5">절반</option><option value="0.75">3/4</option><option value="1">1개 전부</option><option value="1.5">1개 반</option><option value="2">2개</option></select></label>
+            </div>
+            <div className="dialog-nutrients">{nutrientMeta.slice(0, 5).map(({ key, label, unit }) => <div key={key}><span>{label}</span><strong>{formatNutrient(loggedNutrients[key], unit)}</strong></div>)}</div>
+            <div className="dialog-actions"><button type="button" onClick={() => setShowLogPrompt(false)}>추가하지 않기</button><button className="primary-button" type="button" onClick={saveProduct}>오늘 기록</button></div>
+          </section>
+        </div>
+      )}
     </section>
   )
 }
