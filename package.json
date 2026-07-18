@@ -3,13 +3,21 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "scripts": {
     "dev": "vite",
+    "start": "node --disable-warning=ExperimentalWarning server.mjs --static",
+    "server": "node --disable-warning=ExperimentalWarning server.mjs",
+    "server:static": "node --disable-warning=ExperimentalWarning server.mjs --static",
+    "db:sync": "node --disable-warning=ExperimentalWarning scripts/sync-haccp.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview"
   },
   "dependencies": {
+    "@zxing/browser": "^0.2.1",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   },

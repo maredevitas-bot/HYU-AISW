@@ -7,6 +7,17 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Local API keys
+.env
+.env.*
+!.env.example
+
+# Runtime public-data database and SQLite journal files
+data/*.sqlite
+data/*.sqlite-shm
+data/*.sqlite-wal
+!data/.gitkeep
+
 node_modules
 dist
 dist-ssr
