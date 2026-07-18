@@ -31,6 +31,8 @@ export type PackagePart = {
   query?: string
 }
 
+export type ProductDataScope = 'domestic-public' | 'global-community'
+
 export type Product = {
   barcode: string
   name: string
@@ -41,6 +43,7 @@ export type Product = {
   packageParts: PackagePart[]
   advice: string
   source?: string
+  dataScope?: ProductDataScope
   reportNo?: string
   ingredients?: string[]
   safetyFlags?: string[]

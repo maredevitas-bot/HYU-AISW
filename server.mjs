@@ -472,6 +472,7 @@ async function queryFoodQrProduct(barcode) {
         : guessPackagePartsFromText(`${name} ${firstText(labeling.FOOD_TYPE_CD_NM)}`),
       advice: '식약처 푸드QR에서 바코드와 연결된 최신 제품 표시정보를 조회했습니다.',
       source: '식약처 푸드QR 공공데이터',
+      dataScope: 'domestic-public',
       reportNo,
       ingredients,
       safetyFlags: allergens.length ? [`알레르기 유발물질: ${allergens.join(', ')}`] : [],
@@ -623,6 +624,7 @@ function buildHaccpDatabaseProduct(barcode, row) {
     packageParts: guessPackagePartsFromText(`${name} ${category}`),
     advice: '공공데이터에서 동기화한 HACCP 제품 인덱스로 바코드와 품목제조보고번호를 연결했습니다.',
     source: 'HACCP 공개데이터 DB',
+    dataScope: 'domestic-public',
     reportNo: firstText(row?.prdlstReportNo),
     ingredients: splitIngredientText(row?.rawmtrl).slice(0, 8),
     safetyFlags: allergy && allergy !== '알수없음' ? [`알레르기 표시: ${allergy}`] : [],
@@ -876,6 +878,7 @@ function buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Rows) {
       ? '바코드로 제품을 찾고 품목보고번호로 포장재질과 제품 정보를 보완했습니다.'
       : '바코드 공공 API로 제품명을 확인했습니다. 포장재질은 제품 표시 기반으로 보완 확인이 필요합니다.',
     source: [c005 ? 'C005' : '', i1250 ? 'I1250' : '', i2570 ? 'I2570' : '', c002Rows.length ? 'C002' : ''].filter(Boolean).join(' + '),
+    dataScope: 'domestic-public',
     reportNo,
     ingredients: ingredients.slice(0, 8),
     safetyFlags: flags,
@@ -894,8 +897,9 @@ function buildOpenFoodFactsProduct(barcode, product) {
     serving: firstText(product.quantity, '제품 포장 기준'),
     nutrients: nutrientsFromOpenFoodFacts(product.nutriments),
     packageParts: packageParts.length ? packageParts : guessPackagePartsFromText(`${product.product_name ?? ''} ${product.categories ?? ''}`),
-    advice: 'Open Food Facts에서 제품 정보를 보완했습니다. 커뮤니티 기반 데이터라 포장 표시와 함께 확인하는 안내로 사용합니다.',
-    source: 'Open Food Facts',
+    advice: '국내 공공데이터에서 제품을 찾지 못해 Open Food Facts의 글로벌 커뮤니티 정보를 참고용으로 표시합니다. 실제 제품 포장 표시와 함께 확인해 주세요.',
+    source: 'Open Food Facts · 글로벌 커뮤니티',
+    dataScope: 'global-community',
     reportNo: '',
     ingredients: firstText(product.ingredients_text)
       .split(/[,;]/)
@@ -967,8 +971,9 @@ async function queryUpcItemDb(barcode) {
         serving: firstText(item.size, item.dimension, '상품 포장 기준'),
         nutrients: emptyNutrients(),
         packageParts: guessPackagePartsFromText(`${title} ${category}`),
-        advice: 'UPCitemdb에서 상품명과 브랜드를 보완했습니다. 영양성분과 포장재질은 제품 표시 확인이 필요합니다.',
-        source: 'UPCitemdb',
+        advice: '국내 공공데이터에서 제품을 찾지 못해 UPCitemdb의 글로벌 상품 정보를 참고용으로 표시합니다. 영양성분과 포장재질은 제품 표시 확인이 필요합니다.',
+        source: 'UPCitemdb · 글로벌 상품 DB',
+        dataScope: 'global-community',
         reportNo: '',
         ingredients: [],
         safetyFlags: [],
@@ -1030,8 +1035,13 @@ async function handleMeal(req, res) {
   }
 }
 
+function isCommunityProduct(product) {
+  const source = firstText(product?.source)
+  return product?.dataScope === 'global-community' || source.includes('Open Food Facts') || source.includes('UPCitemdb')
+}
+
 function sendFoundProduct(res, barcode, product, diagnostics, cache = true) {
-  if (cache) saveProductCache(barcode, product)
+  if (cache) saveProductCache(barcode, product, isCommunityProduct(product) ? 6 : 24 * 7)
   logBarcodeLookup(barcode, true, product.source)
   sendJson(res, 200, {
     ok: true,
@@ -1054,7 +1064,7 @@ async function handleBarcode(req, res, barcode) {
   const refresh = requestUrl.searchParams.get('refresh') === '1'
   const freshCache = refresh ? null : findCachedProduct(normalized)
 
-  if (freshCache) {
+  if (freshCache && !isCommunityProduct(freshCache.product)) {
     const product = {
       ...freshCache.product,
       advice: `${freshCache.product.advice} ${freshCache.updatedAt}에 저장한 최신 서버 캐시를 사용했습니다.`,
@@ -1108,6 +1118,20 @@ async function handleBarcode(req, res, barcode) {
   if (c005 || i2570 || i1250) {
     const product = await enrichProductRecycling(buildFoodSafetyProduct(normalized, c005, i2570, i1250, c002Result.rows))
     sendFoundProduct(res, normalized, product, diagnostics)
+    return
+  }
+
+  if (freshCache) {
+    const product = {
+      ...freshCache.product,
+      dataScope: 'global-community',
+      advice: `${freshCache.product.advice} 국내 공공데이터를 우선 재조회한 뒤 ${freshCache.updatedAt}에 저장한 글로벌 참고 캐시를 사용했습니다.`,
+    }
+    sendFoundProduct(res, normalized, product, [
+      ...diagnostics,
+      { source: '국내 공공데이터 우선 재조회', count: 0, error: '' },
+      { source: '글로벌 커뮤니티 캐시', count: 1, error: '' },
+    ], false)
     return
   }
 

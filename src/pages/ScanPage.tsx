@@ -1,4 +1,5 @@
 import type { IScannerControls } from '@zxing/browser'
+import { Globe2 } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog, type MealType } from '../foodLog'
@@ -56,6 +57,9 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
     () => selectedProduct ? scaleNutrients(selectedProduct.nutrients, quantity) : undefined,
     [quantity, selectedProduct],
   )
+  const isCommunityProduct = selectedProduct?.dataScope === 'global-community'
+    || selectedProduct?.source?.includes('Open Food Facts')
+    || selectedProduct?.source?.includes('UPCitemdb')
 
   const stopScanner = useCallback(() => {
     scanActiveRef.current = false
@@ -205,7 +209,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
 
   return (
     <section className="page-stack" aria-labelledby="scan-title">
-      <header className="page-heading"><div><span>바코드 공공데이터</span><h1 id="scan-title">식품 영양과 분리배출</h1><p>포장을 스캔해 제품 영양과 포장재 배출 방법을 확인하고 섭취량을 기록합니다.</p><div className="page-source-row"><DataSourceBadge label="식약처·HACCP 바코드 데이터" /><DataSourceBadge label="분리배출 정보조회 API" /></div></div></header>
+      <header className="page-heading"><div><span>국내 바코드 우선 조회</span><h1 id="scan-title">식품 영양과 분리배출</h1><p>국내 공공데이터를 먼저 조회하고, 결과가 없을 때만 글로벌 데이터를 참고용으로 표시합니다.</p><div className="page-source-row"><DataSourceBadge label="식약처·HACCP 바코드 데이터" /><DataSourceBadge label="분리배출 정보조회 API" /></div></div></header>
 
       <div className={selectedProduct ? 'scan-layout has-result' : 'scan-layout lookup-only'}>
         <article className="panel scanner-panel">
@@ -225,6 +229,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
             <div className="panel-heading"><span>제품 영양</span><h2>{selectedProduct.name}</h2></div>
             <>
               <div className="result-source-row"><DataSourceBadge label={selectedProduct.source ?? '바코드 공공데이터'} tone={selectedProduct.source?.includes('Open Food Facts') || selectedProduct.source?.includes('UPCitemdb') ? 'community' : 'public'} /></div>
+              {isCommunityProduct && <div className="community-data-notice" role="note"><Globe2 size={20} aria-hidden="true" /><div><strong>국내 공공데이터 미확인</strong><p>국내 식약처·HACCP 조회에서 찾지 못한 제품입니다. 아래 내용은 글로벌 커뮤니티 참고 정보이며 포장지의 한글 표시사항을 우선 확인해 주세요.</p></div></div>}
               <div className="product-meta"><span>{selectedProduct.maker}</span><span>{selectedProduct.category}</span><span>{selectedProduct.serving}</span></div>
               <div className="product-nutrients">{nutrientMeta.slice(0, 6).map(({ key, label, unit }) => <div key={key}><strong>{formatNutrient(selectedProduct.nutrients[key], unit)}</strong><span>{label}</span></div>)}</div>
               <p className="product-advice">{selectedProduct.advice}</p>
@@ -249,6 +254,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
               <button type="button" aria-label="기록 창 닫기" onClick={() => setShowLogPrompt(false)}>×</button>
             </div>
             <p className="dialog-description">{todayInputValue()} 푸드 캘린더에 실제로 먹은 양만큼 영양소를 추가합니다.</p>
+            {isCommunityProduct && <div className="dialog-source-warning"><Globe2 size={17} aria-hidden="true" /><span>글로벌 커뮤니티 기반 영양 정보입니다. 포장지 표시와 일치하는지 확인한 뒤 기록해 주세요.</span></div>}
             <div className="dialog-product"><div><strong>{selectedProduct.name}</strong><span>{selectedProduct.serving}</span></div><strong>{formatNutrient(loggedNutrients.kcal, 'kcal')}</strong></div>
             <div className="dialog-controls">
               <label><span>언제 먹었나요?</span><select value={mealType} onChange={(event) => setMealType(event.target.value as MealType)}><option value="breakfast">아침</option><option value="lunch">점심</option><option value="dinner">저녁</option><option value="snack">간식</option></select></label>
