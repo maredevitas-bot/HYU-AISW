@@ -12,6 +12,12 @@ import {
   saveFoodLogEntry,
   saveProductCache,
 } from './database.mjs'
+import {
+  nutritionBasisFromText,
+  nutritionBasisFromValues,
+  openFoodFactsNutrition,
+} from './product-nutrition.mjs'
+import { isCommunityProduct, productCacheHours } from './source-policy.mjs'
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url))
 const rootDir = resolve(__dirname)
@@ -262,12 +268,18 @@ async function queryFoodSafety(serviceId, filters) {
     return { rows: [], error: '식약처 API 키가 설정되지 않았습니다.' }
   }
 
-  try {
-    const payload = await fetchJson(foodSafetyUrl(serviceId, filters), { timeoutMs: 3500 })
-    return { rows: foodSafetyRows(payload, serviceId), error: '' }
-  } catch (error) {
-    return { rows: [], error: error instanceof Error ? error.message : String(error) }
+  let lastError = ''
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      const payload = await fetchJson(foodSafetyUrl(serviceId, filters), { timeoutMs: 6500 })
+      return { rows: foodSafetyRows(payload, serviceId), error: '' }
+    } catch (error) {
+      lastError = error instanceof Error ? error.message : String(error)
+      const timedOut = error instanceof Error && (error.name === 'AbortError' || /aborted|timeout/i.test(error.message))
+      if (!timedOut || attempt === 1) break
+    }
   }
+  return { rows: [], error: lastError }
 }
 
 function asArray(value) {
@@ -383,6 +395,48 @@ function nutrientsFromFoodQr(rows) {
   }
 }
 
+function availableNutrientsFromFoodQr(rows) {
+  const candidates = [
+    ['kcal', ['열량', '에너지']],
+    ['carbs', ['탄수화물']],
+    ['protein', ['단백질']],
+    ['fat', ['지방']],
+    ['sodium', ['나트륨']],
+    ['calcium', ['칼슘']],
+    ['iron', ['철', '철분']],
+  ]
+  return candidates.filter(([, names]) => rows.some((row) => {
+    const name = firstText(row?.NIRWMT_NM).replace(/\s/g, '')
+    return names.some((wanted) => name.includes(wanted))
+  })).map(([key]) => key)
+}
+
+function availableNutrientsFromText(value) {
+  const text = firstText(value)
+  return [
+    ['kcal', /열량|에너지/],
+    ['carbs', /탄수화물/],
+    ['protein', /단백질/],
+    ['fat', /(?:^|[,\s])지방/],
+    ['sodium', /나트륨/],
+    ['calcium', /칼슘/],
+    ['iron', /철분|(?:^|[,\s])철/],
+  ].filter(([, pattern]) => pattern.test(text)).map(([key]) => key)
+}
+
+function availableNutrientsFromNutritionDb(row) {
+  if (!row) return []
+  return [
+    ['kcal', 'AMT_NUM1'],
+    ['carbs', 'AMT_NUM6'],
+    ['protein', 'AMT_NUM3'],
+    ['fat', 'AMT_NUM4'],
+    ['sodium', 'AMT_NUM13'],
+    ['calcium', 'AMT_NUM9'],
+    ['iron', 'AMT_NUM10'],
+  ].filter(([, field]) => row[field] !== null && row[field] !== undefined && row[field] !== '').map(([key]) => key)
+}
+
 function splitPublicText(...values) {
   return values
     .flatMap((value) => firstText(value).split(/[,;\n]|\s+및\s+/))
@@ -458,6 +512,8 @@ async function queryFoodQrProduct(barcode) {
   const allergens = uniqueText(allergyRows.map((row) => row.ALG_CSG_MTR_NM), 20)
   const servingAmount = firstText(nutritionRows[0]?.NTRTN_INDCT_TCT)
   const servingUnit = firstText(nutritionRows[0]?.NTRTN_INDCT_TCD)
+  const packageText = firstText(labeling.TOT_CONTENTS, labeling.CAPACITY, manufacture.CAPACITY)
+  const nutritionBasis = nutritionBasisFromValues(servingAmount, servingUnit, packageText)
 
   return {
     product: {
@@ -465,8 +521,10 @@ async function queryFoodQrProduct(barcode) {
       name,
       maker,
       category: firstText(labeling.FOOD_TYPE_CD_NM, labeling.FOOD_SE_CD_NM, '식품'),
-      serving: servingAmount ? `총 내용량 ${numberFrom(servingAmount)} ${servingUnit}` : '제품 포장 기준',
+      serving: packageText || nutritionBasis.label,
       nutrients: nutrientsFromFoodQr(nutritionRows),
+      nutritionBasis,
+      availableNutrients: availableNutrientsFromFoodQr(nutritionRows),
       packageParts: packagePartsFromMaterial(materialText).length
         ? packagePartsFromMaterial(materialText)
         : guessPackagePartsFromText(`${name} ${firstText(labeling.FOOD_TYPE_CD_NM)}`),
@@ -582,6 +640,10 @@ function enrichProductWithPublicRows(product, haccp, nutrition) {
     category: firstText(product.category, haccp?.prdkind, nutrition?.FOOD_CAT1_NM),
     serving: firstText(product.serving === '제품 포장 기준' ? '' : product.serving, haccp?.capacity, nutrition?.SERVING_SIZE, '제품 포장 기준'),
     nutrients: mergeNutrients(product.nutrients, nutrientsFromNutritionDb(nutrition)),
+    availableNutrients: uniqueText([
+      ...asArray(product.availableNutrients),
+      ...availableNutrientsFromNutritionDb(nutrition),
+    ], 7),
     ingredients: uniqueText([...asArray(product.ingredients), ...haccpIngredients]),
     safetyFlags: uniqueText([
       ...asArray(product.safetyFlags),
@@ -621,6 +683,8 @@ function buildHaccpDatabaseProduct(barcode, row) {
     category,
     serving: firstText(row?.capacity, '제품 포장 기준'),
     nutrients: nutrientsFromHaccpText(row?.nutrient),
+    nutritionBasis: nutritionBasisFromText(row?.nutrient, row?.capacity),
+    availableNutrients: availableNutrientsFromText(row?.nutrient),
     packageParts: guessPackagePartsFromText(`${name} ${category}`),
     advice: '공공데이터에서 동기화한 HACCP 제품 인덱스로 바코드와 품목제조보고번호를 연결했습니다.',
     source: 'HACCP 공개데이터 DB',
@@ -833,20 +897,6 @@ function emptyNutrients() {
   return { kcal: 0, carbs: 0, protein: 0, fat: 0, sodium: 0, calcium: 0, iron: 0 }
 }
 
-function nutrientsFromOpenFoodFacts(nutriments = {}) {
-  const sodiumGrams = numberFrom(nutriments.sodium_serving ?? nutriments.sodium_100g)
-
-  return {
-    kcal: numberFrom(nutriments['energy-kcal_serving'] ?? nutriments['energy-kcal_100g']),
-    carbs: numberFrom(nutriments.carbohydrates_serving ?? nutriments.carbohydrates_100g),
-    protein: numberFrom(nutriments.proteins_serving ?? nutriments.proteins_100g),
-    fat: numberFrom(nutriments.fat_serving ?? nutriments.fat_100g),
-    sodium: Math.round(sodiumGrams * 1000),
-    calcium: Math.round(numberFrom(nutriments.calcium_serving ?? nutriments.calcium_100g) * 1000),
-    iron: Math.round(numberFrom(nutriments.iron_serving ?? nutriments.iron_100g) * 10) / 10,
-  }
-}
-
 function buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Rows) {
   const primary = c005 ?? i2570 ?? i1250 ?? {}
   const reportNo = firstText(c005?.PRDLST_REPORT_NO, i2570?.PRDLST_REPORT_NO, i1250?.PRDLST_REPORT_NO)
@@ -873,6 +923,8 @@ function buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Rows) {
     category,
     serving: firstText(primary.POG_DAYCNT) ? `소비기한 ${primary.POG_DAYCNT}` : '제품 포장 기준',
     nutrients: emptyNutrients(),
+    nutritionBasis: nutritionBasisFromText('', ''),
+    availableNutrients: [],
     packageParts: packageParts.length ? packageParts : guessPackagePartsFromText(`${name} ${category}`),
     advice: reportNo
       ? '바코드로 제품을 찾고 품목보고번호로 포장재질과 제품 정보를 보완했습니다.'
@@ -888,6 +940,7 @@ function buildFoodSafetyProduct(barcode, c005, i2570, i1250, c002Rows) {
 function buildOpenFoodFactsProduct(barcode, product) {
   const packagingText = firstText(product.packaging, product.packagings?.map?.((item) => firstText(item.material, item.shape)).join(', '))
   const packageParts = packagePartsFromMaterial(packagingText)
+  const nutrition = openFoodFactsNutrition(product)
 
   return {
     barcode,
@@ -895,7 +948,9 @@ function buildOpenFoodFactsProduct(barcode, product) {
     maker: firstText(product.brands, '브랜드 정보 없음'),
     category: firstText(product.categories, '식품'),
     serving: firstText(product.quantity, '제품 포장 기준'),
-    nutrients: nutrientsFromOpenFoodFacts(product.nutriments),
+    nutrients: nutrition.nutrients,
+    nutritionBasis: nutrition.basis,
+    availableNutrients: nutrition.availableNutrients,
     packageParts: packageParts.length ? packageParts : guessPackagePartsFromText(`${product.product_name ?? ''} ${product.categories ?? ''}`),
     advice: '국내 공공데이터에서 제품을 찾지 못해 Open Food Facts의 글로벌 커뮤니티 정보를 참고용으로 표시합니다. 실제 제품 포장 표시와 함께 확인해 주세요.',
     source: 'Open Food Facts · 글로벌 커뮤니티',
@@ -918,6 +973,7 @@ async function queryOpenFoodFacts(barcode) {
     'product_name',
     'brands',
     'quantity',
+    'serving_size',
     'categories',
     'nutriments',
     'packaging',
@@ -970,6 +1026,8 @@ async function queryUpcItemDb(barcode) {
         category,
         serving: firstText(item.size, item.dimension, '상품 포장 기준'),
         nutrients: emptyNutrients(),
+        nutritionBasis: nutritionBasisFromText('', firstText(item.size)),
+        availableNutrients: [],
         packageParts: guessPackagePartsFromText(`${title} ${category}`),
         advice: '국내 공공데이터에서 제품을 찾지 못해 UPCitemdb의 글로벌 상품 정보를 참고용으로 표시합니다. 영양성분과 포장재질은 제품 표시 확인이 필요합니다.',
         source: 'UPCitemdb · 글로벌 상품 DB',
@@ -1035,19 +1093,34 @@ async function handleMeal(req, res) {
   }
 }
 
-function isCommunityProduct(product) {
-  const source = firstText(product?.source)
-  return product?.dataScope === 'global-community' || source.includes('Open Food Facts') || source.includes('UPCitemdb')
+function ensureProductNutritionBasis(barcode, product) {
+  if (product?.nutritionBasis && Array.isArray(product.availableNutrients)) return product
+  const haccpRow = !isCommunityProduct(product) ? findHaccpProductByBarcode(barcode) : null
+  if (!haccpRow) return product
+  return {
+    ...product,
+    nutritionBasis: product.nutritionBasis ?? nutritionBasisFromText(haccpRow.nutrient, haccpRow.capacity),
+    availableNutrients: Array.isArray(product.availableNutrients) ? product.availableNutrients : availableNutrientsFromText(haccpRow.nutrient),
+  }
+}
+
+function withoutCacheAdvice(product) {
+  const advice = firstText(product?.advice)
+    .split(/(?<=\.)\s+/)
+    .filter((sentence) => !sentence.includes('캐시'))
+    .join(' ')
+  return { ...product, advice }
 }
 
 function sendFoundProduct(res, barcode, product, diagnostics, cache = true) {
-  if (cache) saveProductCache(barcode, product, isCommunityProduct(product) ? 6 : 24 * 7)
-  logBarcodeLookup(barcode, true, product.source)
+  const normalizedProduct = ensureProductNutritionBasis(barcode, product)
+  if (cache || normalizedProduct !== product) saveProductCache(barcode, normalizedProduct, productCacheHours(normalizedProduct))
+  logBarcodeLookup(barcode, true, normalizedProduct.source)
   sendJson(res, 200, {
     ok: true,
     found: true,
-    source: product.source,
-    product,
+    source: normalizedProduct.source,
+    product: normalizedProduct,
     diagnostics,
   })
 }
@@ -1065,10 +1138,7 @@ async function handleBarcode(req, res, barcode) {
   const freshCache = refresh ? null : findCachedProduct(normalized)
 
   if (freshCache && !isCommunityProduct(freshCache.product)) {
-    const product = {
-      ...freshCache.product,
-      advice: `${freshCache.product.advice} ${freshCache.updatedAt}에 저장한 최신 서버 캐시를 사용했습니다.`,
-    }
+    const product = withoutCacheAdvice(freshCache.product)
     sendFoundProduct(res, normalized, product, [{ source: '서버 DB 캐시', count: 1, error: '' }], false)
     return
   }
@@ -1121,11 +1191,10 @@ async function handleBarcode(req, res, barcode) {
     return
   }
 
-  if (freshCache) {
+  if (freshCache?.product?.nutritionBasis && Array.isArray(freshCache.product.availableNutrients)) {
     const product = {
-      ...freshCache.product,
+      ...withoutCacheAdvice(freshCache.product),
       dataScope: 'global-community',
-      advice: `${freshCache.product.advice} 국내 공공데이터를 우선 재조회한 뒤 ${freshCache.updatedAt}에 저장한 글로벌 참고 캐시를 사용했습니다.`,
     }
     sendFoundProduct(res, normalized, product, [
       ...diagnostics,
@@ -1158,10 +1227,7 @@ async function handleBarcode(req, res, barcode) {
   const cached = findCachedProduct(normalized, true)
 
   if (cached) {
-    const product = {
-      ...cached.product,
-      advice: `${cached.product.advice} 외부 데이터 조회 결과가 없어 ${cached.updatedAt}에 저장한 서버 캐시를 사용했습니다.`,
-    }
+    const product = withoutCacheAdvice(cached.product)
     sendFoundProduct(res, normalized, product, [
       ...diagnostics,
       { source: 'Open Food Facts', count: 0, error: '' },

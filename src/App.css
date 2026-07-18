@@ -538,6 +538,25 @@ button:disabled {
   font-size: 0.9rem;
 }
 
+.nutrition-basis-note {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  padding: 10px 12px;
+  border-left: 3px solid #2f7b57;
+  background: #f0f7f3;
+  color: #245f43;
+  font-size: 0.86rem;
+  font-weight: 800;
+}
+
+.nutrition-basis-note.warning {
+  border-left-color: #c17a21;
+  background: #fff8ec;
+  color: #8a5617;
+}
+
 .meal-row em,
 .package-row em {
   justify-self: start;
@@ -1346,13 +1365,33 @@ button:disabled {
   font-weight: 800;
 }
 
-.dialog-controls select {
+.dialog-controls select,
+.dialog-controls input {
   min-width: 0;
   min-height: 42px;
   border: 1px solid var(--border);
   padding: 0 10px;
   background: white;
   color: var(--text-strong);
+}
+
+.amount-presets {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.amount-presets button {
+  min-height: 36px;
+  border-color: var(--border);
+  background: #f8fafc;
+}
+
+.amount-presets button.active {
+  border-color: var(--accent);
+  background: #edf6f0;
+  color: var(--accent);
 }
 
 .dialog-nutrients {

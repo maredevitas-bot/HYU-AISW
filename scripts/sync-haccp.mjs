@@ -18,7 +18,7 @@ function rowsFromPayload(payload) {
   return asArray(payload?.body?.items).flatMap((entry) => asArray(entry?.item ?? entry))
 }
 
-async function fetchPage(pageNo) {
+async function requestPage(pageNo) {
   const apiUrl = new URL('https://apis.data.go.kr/B553748/CertImgListServiceV3/getCertImgListServiceV3')
   apiUrl.searchParams.set('ServiceKey', key)
   apiUrl.searchParams.set('returnType', 'json')
@@ -40,6 +40,19 @@ async function fetchPage(pageNo) {
     totalCount: Number(payload?.body?.totalCount ?? 0),
     rows: rowsFromPayload(payload),
   }
+}
+
+async function fetchPage(pageNo) {
+  let lastError
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      return await requestPage(pageNo)
+    } catch (error) {
+      lastError = error
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, attempt * 1000))
+    }
+  }
+  throw lastError
 }
 
 const firstPage = await fetchPage(1)

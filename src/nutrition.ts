@@ -33,6 +33,15 @@ export type PackagePart = {
 
 export type ProductDataScope = 'domestic-public' | 'global-community'
 
+export type ProductNutritionBasis = {
+  amount: number
+  unit: 'g' | 'ml' | 'serving'
+  label: string
+  confidence: 'declared' | 'unknown'
+  packageAmount?: number
+  packageUnit?: 'g' | 'ml'
+}
+
 export type Product = {
   barcode: string
   name: string
@@ -40,6 +49,8 @@ export type Product = {
   category: string
   serving: string
   nutrients: Nutrients
+  nutritionBasis?: ProductNutritionBasis
+  availableNutrients?: Array<keyof Nutrients>
   packageParts: PackagePart[]
   advice: string
   source?: string

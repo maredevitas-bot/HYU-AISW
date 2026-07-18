@@ -14,6 +14,7 @@
     "db:sync": "node --disable-warning=ExperimentalWarning scripts/sync-haccp.mjs",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
+    "test": "node --test tests/*.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

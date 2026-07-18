@@ -2,6 +2,7 @@ import { useCallback, useMemo, useState } from 'react'
 import { Drumstick, Leaf, Soup, Wheat, type LucideIcon } from 'lucide-react'
 import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog } from '../foodLog'
+import { calculateMealIntakeRatio } from '../../meal-intake.mjs'
 import {
   activityOptions,
   addMealNutrients,
@@ -63,9 +64,9 @@ const sampleMealItems: MealItem[] = [
 
 const portionOptions = [
   { value: 0, label: '안 먹음' },
+  { value: 0.25, label: '조금' },
   { value: 0.5, label: '절반' },
-  { value: 1, label: '기본' },
-  { value: 1.5, label: '많이' },
+  { value: 1, label: '전부' },
 ]
 
 const categoryLabels: Record<TrayCategory, string> = {
@@ -74,14 +75,6 @@ const categoryLabels: Record<TrayCategory, string> = {
   main: '주반찬',
   side: '곁반찬',
   dessert: '후식',
-}
-
-const categoryWeights: Record<TrayCategory, Nutrients> = {
-  rice: { kcal: 1.7, carbs: 3.2, protein: 0.5, fat: 0.2, sodium: 0.05, calcium: 0.2, iron: 0.5 },
-  soup: { kcal: 0.6, carbs: 0.4, protein: 0.7, fat: 0.5, sodium: 2.5, calcium: 0.8, iron: 0.7 },
-  main: { kcal: 1.6, carbs: 0.8, protein: 3, fat: 3, sodium: 1.8, calcium: 0.8, iron: 2 },
-  side: { kcal: 0.7, carbs: 0.7, protein: 0.5, fat: 0.6, sodium: 1, calcium: 1.2, iron: 1.2 },
-  dessert: { kcal: 0.8, carbs: 1, protein: 0.5, fat: 0.4, sodium: 0.3, calcium: 1.5, iron: 0.2 },
 }
 
 const adviceIcons: LucideIcon[] = [Wheat, Soup, Drumstick, Leaf]
@@ -113,14 +106,7 @@ function estimateTrayNutrients(fullMeal: Nutrients, dishes: TrayDish[], portions
     return sumNutrients(dishes.map((dish) => scaleNutrients(dish.nutrients ?? emptyNutrients(), portions[dish.id] ?? 1)))
   }
 
-  return Object.fromEntries(nutrientMeta.map(({ key }) => {
-    const weightTotal = dishes.reduce((sum, dish) => sum + categoryWeights[dish.category][key], 0)
-    const eaten = dishes.reduce((sum, dish) => {
-      const share = weightTotal > 0 ? categoryWeights[dish.category][key] / weightTotal : 0
-      return sum + fullMeal[key] * share * (portions[dish.id] ?? 1)
-    }, 0)
-    return [key, Number(eaten.toFixed(2))]
-  })) as unknown as Nutrients
+  return scaleNutrients(fullMeal, calculateMealIntakeRatio(dishes, portions))
 }
 
 function parseHtmlList(value?: string) {
@@ -162,27 +148,28 @@ function mealRowToItems(row: MealApiRow): MealItem[] {
   ]
 }
 
-function servingAdvice(total: Nutrients, target: Nutrients) {
+function servingAdvice(total: Nutrients, target: Nutrients, live: boolean) {
+  const sodiumKnown = !live || total.sodium > 0
   return [
     {
       label: '밥',
-      amount: total.carbs > target.carbs * 1.08 ? '2-3숟가락 덜기' : '1공기 기준 유지',
-      reason: total.carbs > target.carbs * 1.08 ? '탄수화물이 점심 목표보다 높습니다.' : '에너지 균형이 안정적입니다.',
+      amount: total.carbs > target.carbs * 1.08 ? '제공량의 1/2~3/4' : '먹은 비율 그대로 기록',
+      reason: total.carbs > target.carbs * 1.08 ? '급식 전체의 탄수화물이 점심 참고량보다 높습니다.' : 'NEIS 급식 전체 영양량을 기준으로 한 참고 안내입니다.',
     },
     {
       label: '국물',
-      amount: total.sodium > target.sodium ? '3-5숟가락만' : '반 그릇 이하',
-      reason: total.sodium > target.sodium ? '나트륨이 높아 국물 섭취를 줄입니다.' : '나트륨은 목표 안쪽입니다.',
+      amount: sodiumKnown && total.sodium > target.sodium ? '건더기 중심, 3-5숟가락' : '건더기 중심으로 먹기',
+      reason: sodiumKnown ? '급식 전체 나트륨을 기준으로 한 보수적인 안내입니다.' : 'NEIS가 나트륨을 제공하지 않아 일반적인 국물 조절 원칙을 적용합니다.',
     },
     {
       label: '단백질 반찬',
-      amount: total.protein < target.protein ? '한 젓가락 더' : '현재 양 유지',
-      reason: total.protein < target.protein ? '성장기 단백질 보충이 필요합니다.' : '단백질이 충분합니다.',
+      amount: total.protein > 0 && total.protein < target.protein ? '제공량 남기지 않기' : '먹은 비율 기록하기',
+      reason: total.protein > 0 ? '급식 전체 단백질과 점심 참고량을 비교했습니다.' : '단백질 정보가 없어 양만 기록합니다.',
     },
     {
       label: '채소·우유',
-      amount: total.calcium < target.calcium ? '우유 1개 또는 채소 남기지 않기' : '채소 반찬 유지',
-      reason: total.calcium < target.calcium ? '칼슘 목표에 조금 부족합니다.' : '칼슘 보충이 잘 되어 있습니다.',
+      amount: total.calcium > 0 && total.calcium < target.calcium ? '우유·채소 제공량 챙기기' : '먹은 비율 기록하기',
+      reason: total.calcium > 0 ? '급식 전체 칼슘과 점심 참고량을 비교했습니다.' : '칼슘 정보가 없어 양만 기록합니다.',
     },
   ]
 }
@@ -199,9 +186,10 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
 
   const trayDishes = useMemo(() => trayDishesFrom(mealPlan, isLiveMeal), [isLiveMeal, mealPlan])
   const fullMealTotal = useMemo(() => isLiveMeal ? (mealPlan[0]?.nutrients ?? emptyNutrients()) : addMealNutrients(mealPlan), [isLiveMeal, mealPlan])
+  const intakeRatio = useMemo(() => calculateMealIntakeRatio(trayDishes, trayPortions), [trayDishes, trayPortions])
   const total = useMemo(() => estimateTrayNutrients(fullMealTotal, trayDishes, trayPortions, isLiveMeal), [fullMealTotal, isLiveMeal, trayDishes, trayPortions])
   const target = useMemo(() => makeLunchTarget(gender, activity), [gender, activity])
-  const advice = useMemo(() => servingAdvice(total, target), [total, target])
+  const advice = useMemo(() => servingAdvice(fullMealTotal, target, isLiveMeal), [fullMealTotal, isLiveMeal, target])
 
   const setDishPortion = (dishId: string, portion: number) => {
     setTrayPortions((current) => ({ ...current, [dishId]: portion }))
@@ -275,7 +263,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
         source: 'meal',
         mealType: 'lunch',
         name: `${selectedSchool.SCHUL_NM} 급식`,
-        quantity: 1,
+        quantity: intakeRatio,
         nutrients: total,
         metadata: {
           school: selectedSchool.SCHUL_NM,
@@ -285,7 +273,10 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
             portion: trayPortions[dish.id] ?? 1,
           })),
           source: 'NEIS 급식식단정보 API',
-          calculation: 'NEIS 메뉴 전체 영양량을 음식 종류와 사용자가 담은 양에 따라 나눈 추정치',
+          calculation: 'NEIS 급식 전체 영양량에 메뉴별 섭취 비율의 평균을 곱한 추정치',
+          intakeRatio,
+          consumptionLabel: `급식 전체의 약 ${Math.round(intakeRatio * 100)}% 섭취`,
+          availableNutrients: nutrientMeta.filter(({ key }) => fullMealTotal[key] > 0).map(({ key }) => key),
         },
       })
       onSaved()
@@ -293,7 +284,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
     } catch (error) {
       setStatus(error instanceof Error ? error.message : '급식 기록 저장 실패')
     }
-  }, [isLiveMeal, mealDate, onSaved, ownerId, selectedSchool, total, trayDishes, trayPortions])
+  }, [fullMealTotal, intakeRatio, isLiveMeal, mealDate, onSaved, ownerId, selectedSchool, total, trayDishes, trayPortions])
 
   return (
     <section className="page-stack" aria-labelledby="meal-title">
@@ -301,7 +292,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
         <div>
           <span>NEIS 공공데이터</span>
           <h1 id="meal-title">급식 영양과 섭취량</h1>
-          <p>학교 급식표를 불러와 영양소를 비교하고, 실제로 먹을 양을 판단합니다.</p>
+          <p>학교 급식표를 불러와 제공량 중 실제로 먹은 비율을 기록합니다.</p>
           <div className="page-source-row"><DataSourceBadge label="NEIS 급식식단정보 API" /><span className="data-mode">{isLiveMeal ? '조회 데이터' : '조회 전 예시'}</span></div>
         </div>
         <button className={isLiveMeal ? 'primary-button' : 'secondary-button'} type="button" onClick={saveMeal}>{isLiveMeal ? '담은 급식 기록' : '급식 조회 후 기록'}</button>
@@ -335,7 +326,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           </div>
 
           <section className="meal-tray-section" aria-labelledby="meal-tray-title">
-            <div className="tray-heading"><div><span>{isLiveMeal ? '조회한 급식표' : '급식판 사용 예시'}</span><h3 id="meal-tray-title">급식판에 담은 양</h3></div><strong>{Math.round(total.kcal).toLocaleString('ko-KR')} kcal</strong></div>
+            <div className="tray-heading"><div><span>{isLiveMeal ? `전체 급식의 약 ${Math.round(intakeRatio * 100)}%` : '급식판 사용 예시'}</span><h3 id="meal-tray-title">실제로 먹은 비율</h3></div><strong>약 {Math.round(total.kcal).toLocaleString('ko-KR')} kcal</strong></div>
             <div className="meal-tray">
               {trayDishes.map((dish) => (
                 <div className={`tray-compartment ${dish.category}`} key={dish.id}>
@@ -346,13 +337,13 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
                 </div>
               ))}
             </div>
-            <p className="tray-note">{isLiveMeal ? 'NEIS가 제공한 메뉴 전체 영양량을 음식 종류와 선택한 양에 따라 나눈 추정치입니다.' : '학교 급식 조회 후 실제 메뉴로 교체되며, 조회 전 예시는 캘린더에 저장되지 않습니다.'}</p>
+            <p className="tray-note">{isLiveMeal ? 'NEIS는 메뉴별 영양량을 제공하지 않습니다. 각 메뉴에서 먹은 비율의 평균을 급식 전체 영양량에 적용한 추정치입니다.' : '학교 급식 조회 후 실제 메뉴로 교체되며, 조회 전 예시는 캘린더에 저장되지 않습니다.'}</p>
           </section>
         </article>
 
         <div className="page-stack compact">
           <article className="panel">
-            <div className="panel-heading"><span>섭취 조절</span><h2>얼마나 먹을까?</h2></div>
+            <div className="panel-heading"><span>참고 안내</span><h2>어떻게 먹을까?</h2></div>
             <div className="advice-list">{advice.map((item, index) => {
               const AdviceIcon = adviceIcons[index] ?? Wheat
               return <div className="advice-row" key={item.label}><span className="advice-icon"><AdviceIcon aria-hidden="true" size={20} strokeWidth={2.1} /></span><div><span>{item.label}</span><strong>{item.amount}</strong><p>{item.reason}</p></div></div>
@@ -360,7 +351,10 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           </article>
           <article className="panel">
             <div className="panel-heading"><span>영양 비교</span><h2>점심 목표 대비</h2></div>
-            <div className="nutrient-list">{nutrientMeta.map(({ key, label, unit }) => <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{formatNutrient(total[key], unit)} / {formatNutrient(target[key], unit)}</span></div><div className="meter" aria-label={`${label} ${nutrientPercent(total[key], target[key])}%`}><span style={{ width: `${nutrientPercent(total[key], target[key])}%` }} /></div></div>)}</div>
+            <div className="nutrient-list">{nutrientMeta.map(({ key, label, unit }) => {
+              const available = !isLiveMeal || fullMealTotal[key] > 0
+              return <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{available ? `약 ${formatNutrient(total[key], unit)} / ${formatNutrient(target[key], unit)}` : 'NEIS 미제공'}</span></div>{available && <div className="meter" aria-label={`${label} ${nutrientPercent(total[key], target[key])}%`}><span style={{ width: `${nutrientPercent(total[key], target[key])}%` }} /></div>}</div>
+            })}</div>
           </article>
         </div>
       </div>

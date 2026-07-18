@@ -1,9 +1,9 @@
 import type { IScannerControls } from '@zxing/browser'
-import { Globe2 } from 'lucide-react'
+import { Globe2, Scale } from 'lucide-react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog, type MealType } from '../foodLog'
-import { formatNutrient, nutrientMeta, scaleNutrients, todayInputValue, type Product } from '../nutrition'
+import { emptyNutrients, formatNutrient, nutrientMeta, scaleNutrients, todayInputValue, type Product } from '../nutrition'
 
 type ScanPageProps = {
   ownerId: string
@@ -41,7 +41,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   const [scannerStatus, setScannerStatus] = useState('카메라 대기')
   const [isScanning, setIsScanning] = useState(false)
   const [mealType, setMealType] = useState<MealType>('snack')
-  const [quantity, setQuantity] = useState(1)
+  const [consumedAmount, setConsumedAmount] = useState(1)
   const [showLogPrompt, setShowLogPrompt] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement | null>(null)
@@ -53,9 +53,18 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   const scanActiveRef = useRef(false)
   const lastDetectedRef = useRef('')
 
+  const nutritionBasis = selectedProduct?.nutritionBasis
+  const availableNutrients = useMemo(
+    () => selectedProduct ? (selectedProduct.availableNutrients ?? nutrientMeta.filter(({ key }) => selectedProduct.nutrients[key] > 0).map(({ key }) => key)) : [],
+    [selectedProduct],
+  )
+  const canCalculateNutrition = Boolean(
+    selectedProduct && nutritionBasis && nutritionBasis.confidence === 'declared' && nutritionBasis.amount > 0 && availableNutrients.length,
+  )
+  const nutritionMultiplier = canCalculateNutrition && nutritionBasis ? consumedAmount / nutritionBasis.amount : 0
   const loggedNutrients = useMemo(
-    () => selectedProduct ? scaleNutrients(selectedProduct.nutrients, quantity) : undefined,
-    [quantity, selectedProduct],
+    () => selectedProduct && canCalculateNutrition ? scaleNutrients(selectedProduct.nutrients, nutritionMultiplier) : emptyNutrients(),
+    [canCalculateNutrition, nutritionMultiplier, selectedProduct],
   )
   const isCommunityProduct = selectedProduct?.dataScope === 'global-community'
     || selectedProduct?.source?.includes('Open Food Facts')
@@ -89,7 +98,9 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
         return setScannerStatus(payload.message ?? '등록되지 않은 바코드입니다.')
       }
       setSelectedProduct(payload.product)
-      setQuantity(1)
+      const basis = payload.product.nutritionBasis
+      const packageAmount = basis?.packageAmount && basis.packageUnit === basis.unit ? basis.packageAmount : 0
+      setConsumedAmount(packageAmount || basis?.amount || 1)
       setMealType('snack')
       setShowLogPrompt(true)
       setScannerStatus(`${payload.product.name} 조회 완료`)
@@ -178,7 +189,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
   }, [handleBarcodeValue, scanLoop, stopScanner])
 
   const saveProduct = useCallback(async () => {
-    if (!selectedProduct || !loggedNutrients) return
+    if (!selectedProduct) return
     setScannerStatus('푸드 캘린더에 저장 중')
     try {
       await saveFoodLog({
@@ -188,13 +199,19 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
         source: 'barcode',
         mealType,
         name: selectedProduct.name,
-        quantity,
+        quantity: canCalculateNutrition ? nutritionMultiplier : 1,
         nutrients: loggedNutrients,
         metadata: {
           barcode: selectedProduct.barcode,
           maker: selectedProduct.maker,
           serving: selectedProduct.serving,
           source: selectedProduct.source,
+          nutritionBasis,
+          nutritionUnavailable: !canCalculateNutrition,
+          availableNutrients: canCalculateNutrition ? availableNutrients : [],
+          consumptionLabel: canCalculateNutrition && nutritionBasis
+            ? `${consumedAmount}${nutritionBasis.unit === 'serving' ? '회분' : nutritionBasis.unit}`
+            : '영양 정보 없이 음식 이름만 기록',
         },
       })
       onSaved()
@@ -203,7 +220,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
     } catch (error) {
       setScannerStatus(error instanceof Error ? error.message : '식품 기록 저장 실패')
     }
-  }, [loggedNutrients, mealType, onSaved, ownerId, quantity, selectedProduct])
+  }, [availableNutrients, canCalculateNutrition, consumedAmount, loggedNutrients, mealType, nutritionBasis, nutritionMultiplier, onSaved, ownerId, selectedProduct])
 
   useEffect(() => () => stopScanner(), [stopScanner])
 
@@ -231,7 +248,8 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
               <div className="result-source-row"><DataSourceBadge label={selectedProduct.source ?? '바코드 공공데이터'} tone={selectedProduct.source?.includes('Open Food Facts') || selectedProduct.source?.includes('UPCitemdb') ? 'community' : 'public'} /></div>
               {isCommunityProduct && <div className="community-data-notice" role="note"><Globe2 size={20} aria-hidden="true" /><div><strong>국내 공공데이터 미확인</strong><p>국내 식약처·HACCP 조회에서 찾지 못한 제품입니다. 아래 내용은 글로벌 커뮤니티 참고 정보이며 포장지의 한글 표시사항을 우선 확인해 주세요.</p></div></div>}
               <div className="product-meta"><span>{selectedProduct.maker}</span><span>{selectedProduct.category}</span><span>{selectedProduct.serving}</span></div>
-              <div className="product-nutrients">{nutrientMeta.slice(0, 6).map(({ key, label, unit }) => <div key={key}><strong>{formatNutrient(selectedProduct.nutrients[key], unit)}</strong><span>{label}</span></div>)}</div>
+              <div className={canCalculateNutrition ? 'nutrition-basis-note' : 'nutrition-basis-note warning'}><Scale size={18} aria-hidden="true" /><span>{nutritionBasis?.label ?? '영양 기준량 미확인'}{nutritionBasis?.packageAmount ? ` · 총 내용량 ${nutritionBasis.packageAmount}${nutritionBasis.packageUnit}` : ''}</span></div>
+              <div className="product-nutrients">{nutrientMeta.slice(0, 6).map(({ key, label, unit }) => <div key={key}><strong>{availableNutrients.includes(key) ? formatNutrient(selectedProduct.nutrients[key], unit) : '정보 없음'}</strong><span>{label}</span></div>)}</div>
               <p className="product-advice">{selectedProduct.advice}</p>
               {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && <div className="detail-list"><strong>원재료</strong><p>{selectedProduct.ingredients.join(', ')}</p></div>}
               <button className="primary-button add-today-button" type="button" onClick={() => setShowLogPrompt(true)}>오늘 푸드 캘린더에 추가</button>
@@ -246,7 +264,7 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
         </div>}
       </div>
 
-      {showLogPrompt && selectedProduct && loggedNutrients && (
+      {showLogPrompt && selectedProduct && (
         <div className="modal-backdrop">
           <section className="log-dialog" role="dialog" aria-modal="true" aria-labelledby="food-log-dialog-title">
             <div className="dialog-heading">
@@ -255,13 +273,15 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
             </div>
             <p className="dialog-description">{todayInputValue()} 푸드 캘린더에 실제로 먹은 양만큼 영양소를 추가합니다.</p>
             {isCommunityProduct && <div className="dialog-source-warning"><Globe2 size={17} aria-hidden="true" /><span>글로벌 커뮤니티 기반 영양 정보입니다. 포장지 표시와 일치하는지 확인한 뒤 기록해 주세요.</span></div>}
-            <div className="dialog-product"><div><strong>{selectedProduct.name}</strong><span>{selectedProduct.serving}</span></div><strong>{formatNutrient(loggedNutrients.kcal, 'kcal')}</strong></div>
+            {!canCalculateNutrition && <div className="dialog-source-warning"><Scale size={17} aria-hidden="true" /><span>영양 기준량을 확인할 수 없어 음식 이름만 기록하며 영양 합계에는 포함하지 않습니다.</span></div>}
+            <div className="dialog-product"><div><strong>{selectedProduct.name}</strong><span>{nutritionBasis?.label ?? '영양 기준량 미확인'}</span></div><strong>{canCalculateNutrition ? formatNutrient(loggedNutrients.kcal, 'kcal') : '합산 제외'}</strong></div>
             <div className="dialog-controls">
               <label><span>언제 먹었나요?</span><select value={mealType} onChange={(event) => setMealType(event.target.value as MealType)}><option value="breakfast">아침</option><option value="lunch">점심</option><option value="dinner">저녁</option><option value="snack">간식</option></select></label>
-              <label><span>포장 기준 얼마나 먹었나요?</span><select value={quantity} onChange={(event) => setQuantity(Number(event.target.value))}><option value="0.25">1/4</option><option value="0.5">절반</option><option value="0.75">3/4</option><option value="1">1개 전부</option><option value="1.5">1개 반</option><option value="2">2개</option></select></label>
+              {canCalculateNutrition && nutritionBasis && <label><span>실제로 먹은 양 ({nutritionBasis.unit === 'serving' ? '회분' : nutritionBasis.unit})</span><input type="number" min="0.1" max="5000" step={nutritionBasis.unit === 'serving' ? '0.25' : '1'} value={consumedAmount} onChange={(event) => setConsumedAmount(Math.max(0.1, Number(event.target.value) || 0.1))} /></label>}
             </div>
-            <div className="dialog-nutrients">{nutrientMeta.slice(0, 5).map(({ key, label, unit }) => <div key={key}><span>{label}</span><strong>{formatNutrient(loggedNutrients[key], unit)}</strong></div>)}</div>
-            <div className="dialog-actions"><button type="button" onClick={() => setShowLogPrompt(false)}>추가하지 않기</button><button className="primary-button" type="button" onClick={saveProduct}>오늘 기록</button></div>
+            {canCalculateNutrition && nutritionBasis?.packageAmount && nutritionBasis.packageUnit === nutritionBasis.unit && <div className="amount-presets" aria-label="총 내용량 기준 빠른 선택">{[{ label: '1/4', ratio: 0.25 }, { label: '절반', ratio: 0.5 }, { label: '전부', ratio: 1 }].map((option) => <button type="button" key={option.ratio} className={consumedAmount === nutritionBasis.packageAmount! * option.ratio ? 'active' : ''} onClick={() => setConsumedAmount(nutritionBasis.packageAmount! * option.ratio)}>{option.label}</button>)}</div>}
+            {canCalculateNutrition && <div className="dialog-nutrients">{nutrientMeta.slice(0, 5).map(({ key, label, unit }) => <div key={key}><span>{label}</span><strong>{availableNutrients.includes(key) ? formatNutrient(loggedNutrients[key], unit) : '정보 없음'}</strong></div>)}</div>}
+            <div className="dialog-actions"><button type="button" onClick={() => setShowLogPrompt(false)}>추가하지 않기</button><button className="primary-button" type="button" onClick={saveProduct}>{canCalculateNutrition ? '오늘 기록' : '이름만 기록'}</button></div>
           </section>
         </div>
       )}

@@ -44,7 +44,17 @@ function monthCells(month: string) {
 }
 
 function hasNutrition(entry: FoodLogEntry) {
-  return nutrientMeta.some(({ key }) => entry.nutrients[key] > 0)
+  return availableNutrientKeys(entry).length > 0
+}
+
+function availableNutrientKeys(entry: FoodLogEntry) {
+  const metadataKeys = Array.isArray(entry.metadata.availableNutrients) ? entry.metadata.availableNutrients : null
+  if (metadataKeys) return nutrientMeta.map(({ key }) => key).filter((key) => metadataKeys.includes(key))
+  return nutrientMeta.map(({ key }) => key).filter((key) => entry.nutrients[key] > 0)
+}
+
+function consumptionLabel(entry: FoodLogEntry) {
+  return typeof entry.metadata.consumptionLabel === 'string' ? entry.metadata.consumptionLabel : ''
 }
 
 function entrySourceLabel(entry: FoodLogEntry) {
@@ -79,6 +89,10 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
   const dailyEntries = useMemo(() => entries.filter((entry) => entry.date === selectedDate), [entries, selectedDate])
   const dailyNutritionEntries = useMemo(() => dailyEntries.filter(hasNutrition), [dailyEntries])
   const dailyTotal = useMemo(() => sumNutrients(dailyNutritionEntries.map((entry) => entry.nutrients)), [dailyNutritionEntries])
+  const dailyAvailableKeys = useMemo(
+    () => nutrientMeta.map(({ key }) => key).filter((key) => dailyNutritionEntries.some((entry) => availableNutrientKeys(entry).includes(key))),
+    [dailyNutritionEntries],
+  )
   const manualEntryCount = dailyEntries.length - dailyNutritionEntries.length
   const cells = useMemo(() => monthCells(month), [month])
   const byDate = useMemo(() => entries.reduce<Record<string, FoodLogEntry[]>>((groups, entry) => {
@@ -150,7 +164,7 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
               return (
                 <button aria-label={`${date}${dayEntries.length ? `, ${dayEntries.length}개 기록, ${sourceDescription}` : ', 기록 없음'}`} className={`calendar-day ${selectedDate === date ? 'selected' : ''}`} key={date} type="button" onClick={() => setSelectedDate(date)}>
                   <span className="calendar-day-number">{Number(date.slice(-2))}</span>
-                  {dayEntries.length > 0 && <div className="calendar-day-details"><strong>{nutritionEntries.length ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : `${dayEntries.length}개 기록`}</strong><span className="calendar-source-dots" aria-hidden="true">{daySources.map((source) => <i className={`source-dot ${source}`} key={source} />)}</span></div>}
+                  {dayEntries.length > 0 && <div className="calendar-day-details"><strong>{nutritionEntries.some((entry) => availableNutrientKeys(entry).includes('kcal')) ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : `${dayEntries.length}개 기록`}</strong><span className="calendar-source-dots" aria-hidden="true">{daySources.map((source) => <i className={`source-dot ${source}`} key={source} />)}</span></div>}
                 </button>
               )
             })}
@@ -162,7 +176,7 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
             <div className="panel-heading"><span>{selectedDate}</span><h2>기록된 영양소 합계</h2></div>
             {dailyNutritionEntries.length > 0 ? <>
               <p className="summary-note">캘린더에 기록된 항목 중 영양 정보가 제공된 항목만 합산했습니다. 하루 전체 섭취량이나 영양 상태를 판정하는 값은 아닙니다.{manualEntryCount > 0 ? ` 성분을 알 수 없는 직접 기록 ${manualEntryCount}개는 합계에 포함하지 않았습니다.` : ''}</p>
-              <div className="nutrient-list recorded-nutrient-list">{nutrientMeta.map(({ key, label, unit }) => <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{formatNutrient(dailyTotal[key], unit)}</span></div></div>)}</div>
+              <div className="nutrient-list recorded-nutrient-list">{nutrientMeta.map(({ key, label, unit }) => <div className="nutrient-row" key={key}><div><strong>{label}</strong><span>{dailyAvailableKeys.includes(key) ? formatNutrient(dailyTotal[key], unit) : '정보 없음'}</span></div></div>)}</div>
             </> : dailyEntries.length > 0 ? <div className="unknown-nutrition-state"><strong>음식 이름만 기록되어 있습니다.</strong><p>정확한 성분을 알 수 없어 영양 합계에는 포함하지 않았습니다.</p></div> : <p className="empty-state">선택한 날짜에 저장된 음식이 없습니다. 아래에서 음식 이름을 직접 기록할 수 있습니다.</p>}
           </article>
 
@@ -172,7 +186,7 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
               <label><span>{selectedDate}에 음식 직접 기록</span><div><input aria-label="직접 기록할 음식 이름" value={manualFoodName} onChange={(event) => setManualFoodName(event.target.value)} placeholder="예: 떡볶이, 집에서 먹은 샌드위치" maxLength={120} /><button className="primary-button" type="submit">추가</button></div></label>
               <p>음식 이름만 저장하며 영양 합계에는 포함하지 않습니다.</p>
             </form>
-            <div className="food-entry-list">{dailyEntries.map((entry) => <div className="food-entry" key={entry.id}><div><div className="food-entry-source"><span>{entry.source === 'manual' ? '직접 기록' : mealTypeLabels[entry.mealType]}</span><DataSourceBadge label={entrySourceLabel(entry)} tone={entry.source === 'manual' ? 'manual' : entrySourceLabel(entry).includes('Open Food Facts') ? 'community' : 'public'} /></div><strong>{entry.name}</strong><small>{entry.source === 'meal' ? `급식 · ${entry.quantity}회분` : entry.source === 'barcode' ? `바코드 제품 · ${entry.quantity}회분` : '영양 정보 없음 · 합산 제외'}</small></div><div><strong>{entry.source === 'manual' ? '성분 미상' : `${Math.round(entry.nutrients.kcal).toLocaleString('ko-KR')} kcal`}</strong><button type="button" aria-label={`${entry.name} 기록 삭제`} onClick={() => void deleteEntry(entry)}>삭제</button></div></div>)}</div>
+            <div className="food-entry-list">{dailyEntries.map((entry) => <div className="food-entry" key={entry.id}><div><div className="food-entry-source"><span>{entry.source === 'manual' ? '직접 기록' : mealTypeLabels[entry.mealType]}</span><DataSourceBadge label={entrySourceLabel(entry)} tone={entry.source === 'manual' ? 'manual' : entrySourceLabel(entry).includes('Open Food Facts') ? 'community' : 'public'} /></div><strong>{entry.name}</strong><small>{entry.source === 'manual' ? '영양 정보 없음 · 합산 제외' : consumptionLabel(entry) || (entry.source === 'meal' ? `급식 · ${Math.round(entry.quantity * 100)}%` : `바코드 제품 · ${entry.quantity}회분`)}</small></div><div><strong>{availableNutrientKeys(entry).includes('kcal') ? `${Math.round(entry.nutrients.kcal).toLocaleString('ko-KR')} kcal` : '성분 미상'}</strong><button type="button" aria-label={`${entry.name} 기록 삭제`} onClick={() => void deleteEntry(entry)}>삭제</button></div></div>)}</div>
           </article>
         </div>
       </div>
