@@ -1,5 +1,6 @@
 import type { IScannerControls } from '@zxing/browser'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog, type MealType } from '../foodLog'
 import { formatNutrient, nutrientMeta, scaleNutrients, todayInputValue, type Product } from '../nutrition'
 
@@ -204,9 +205,9 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
 
   return (
     <section className="page-stack" aria-labelledby="scan-title">
-      <header className="page-heading"><div><span>바코드 공공데이터</span><h1 id="scan-title">식품 영양과 분리배출</h1><p>포장을 스캔해 제품 영양과 포장재 배출 방법을 확인하고 섭취량을 기록합니다.</p></div></header>
+      <header className="page-heading"><div><span>바코드 공공데이터</span><h1 id="scan-title">식품 영양과 분리배출</h1><p>포장을 스캔해 제품 영양과 포장재 배출 방법을 확인하고 섭취량을 기록합니다.</p><div className="page-source-row"><DataSourceBadge label="식약처·HACCP 바코드 데이터" /><DataSourceBadge label="분리배출 정보조회 API" /></div></div></header>
 
-      <div className="scan-layout">
+      <div className={selectedProduct ? 'scan-layout has-result' : 'scan-layout lookup-only'}>
         <article className="panel scanner-panel">
           <div className="panel-heading"><span>실제 바코드</span><h2>카메라 스캔</h2></div>
           <div className={isScanning ? 'scanner-preview active' : 'scanner-preview'}>
@@ -219,23 +220,25 @@ export default function ScanPage({ ownerId, onSaved }: ScanPageProps) {
           <div className="sample-buttons" aria-label="시연 바코드">{barcodeSamples.map((sample) => <button key={sample.barcode} type="button" onClick={() => void lookupBarcode(sample.barcode)}>{sample.label}</button>)}</div>
         </article>
 
-        <div className="page-stack compact">
+        {selectedProduct && <div className="page-stack compact scan-results">
           <article className="panel product-panel">
-            <div className="panel-heading"><span>제품 영양</span><h2>{selectedProduct?.name ?? '바코드를 조회해 주세요'}</h2></div>
-            {selectedProduct ? <>
-              <div className="product-meta"><span>{selectedProduct.maker}</span><span>{selectedProduct.category}</span><span>{selectedProduct.serving}</span>{selectedProduct.source && <span>{selectedProduct.source}</span>}</div>
+            <div className="panel-heading"><span>제품 영양</span><h2>{selectedProduct.name}</h2></div>
+            <>
+              <div className="result-source-row"><DataSourceBadge label={selectedProduct.source ?? '바코드 공공데이터'} tone={selectedProduct.source?.includes('Open Food Facts') || selectedProduct.source?.includes('UPCitemdb') ? 'community' : 'public'} /></div>
+              <div className="product-meta"><span>{selectedProduct.maker}</span><span>{selectedProduct.category}</span><span>{selectedProduct.serving}</span></div>
               <div className="product-nutrients">{nutrientMeta.slice(0, 6).map(({ key, label, unit }) => <div key={key}><strong>{formatNutrient(selectedProduct.nutrients[key], unit)}</strong><span>{label}</span></div>)}</div>
               <p className="product-advice">{selectedProduct.advice}</p>
               {selectedProduct.ingredients && selectedProduct.ingredients.length > 0 && <div className="detail-list"><strong>원재료</strong><p>{selectedProduct.ingredients.join(', ')}</p></div>}
               <button className="primary-button add-today-button" type="button" onClick={() => setShowLogPrompt(true)}>오늘 푸드 캘린더에 추가</button>
-            </> : <p className="empty-state">카메라로 바코드를 스캔하거나 번호를 입력하면 공공데이터에서 제품을 찾습니다.</p>}
+            </>
           </article>
 
           <article className="panel recycle-panel">
             <div className="panel-heading"><span>분리배출</span><h2>포장 구성</h2></div>
-            <div className="package-list">{(selectedProduct?.packageParts ?? [{ part: '제품 포장', material: '표시 확인 필요', stream: '직접 확인', guide: '포장재의 분리배출 표시를 확인해 주세요.' }]).map((part, index) => <div className="package-row" key={`${part.part}-${part.material}-${index}`}><div><strong>{part.part}</strong><span>{part.material}</span></div><em>{part.stream}</em><p>{part.guide}</p>{part.source && <small className="package-source">{part.source}{part.query ? ` · 검색어 ${part.query}` : ''}</small>}</div>)}</div>
+            <div className="result-source-row"><DataSourceBadge label={selectedProduct.packageParts.find((part) => part.source)?.source ?? '제품 표시 기반 분리배출 안내'} /></div>
+            <div className="package-list">{(selectedProduct.packageParts.length ? selectedProduct.packageParts : [{ part: '제품 포장', material: '표시 확인 필요', stream: '직접 확인', guide: '포장재의 분리배출 표시를 확인해 주세요.' }]).map((part, index) => <div className="package-row" key={`${part.part}-${part.material}-${index}`}><div><strong>{part.part}</strong><span>{part.material}</span></div><em>{part.stream}</em><p>{part.guide}</p>{part.source && <small className="package-source">{part.source}{part.query ? ` · 검색어 ${part.query}` : ''}</small>}</div>)}</div>
           </article>
-        </div>
+        </div>}
       </div>
 
       {showLogPrompt && selectedProduct && loggedNutrients && (

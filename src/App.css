@@ -56,21 +56,33 @@
 
 .page-tab {
   display: grid;
-  gap: 2px;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
   min-width: 0;
   min-height: 58px;
   padding: 9px 12px;
   text-align: left;
 }
 
-.page-tab strong,
-.page-tab span {
+.page-tab > svg {
+  color: var(--muted);
+}
+
+.page-tab-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.page-tab-copy strong,
+.page-tab-copy > span {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.page-tab span {
+.page-tab-copy > span {
   color: var(--muted);
   font-size: 0.75rem;
   font-weight: 600;
@@ -79,6 +91,10 @@
 .page-tab.active {
   border-color: var(--accent);
   background: #eef8f2;
+  color: var(--accent);
+}
+
+.page-tab.active > svg {
   color: var(--accent);
 }
 
@@ -124,6 +140,65 @@
   line-height: 1.55;
 }
 
+.page-source-row,
+.result-source-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.result-source-row {
+  margin: -4px 0 12px;
+}
+
+.source-badge {
+  display: inline-flex !important;
+  gap: 6px;
+  align-items: center;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 8px;
+  border: 1px solid #bdd9ca;
+  border-radius: 5px;
+  background: #f1f8f4;
+  color: #246545 !important;
+  font-size: 0.72rem !important;
+  font-weight: 800 !important;
+  line-height: 1.2;
+}
+
+.source-badge > svg {
+  flex: 0 0 auto;
+}
+
+.source-badge > span {
+  overflow: hidden;
+  color: inherit !important;
+  font-size: inherit !important;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.source-badge.community {
+  border-color: #d7cbed;
+  background: #f7f3fc;
+  color: #63488d !important;
+}
+
+.source-badge.manual {
+  border-color: #d7dde2;
+  background: #f5f7f8;
+  color: #5d6872 !important;
+}
+
+.data-mode {
+  color: var(--muted) !important;
+  font-size: 0.75rem !important;
+  font-weight: 700 !important;
+}
+
 .page-heading > button {
   min-width: 180px;
   padding: 0 16px;
@@ -140,6 +215,15 @@
 
 .scan-layout {
   grid-template-columns: minmax(300px, 0.72fr) minmax(0, 1.28fr);
+}
+
+.scan-layout.lookup-only {
+  grid-template-columns: minmax(320px, 640px);
+  justify-content: center;
+}
+
+.scan-layout.lookup-only .scanner-panel {
+  width: 100%;
 }
 
 .calendar-layout {
@@ -420,35 +504,50 @@ button:disabled {
   font-weight: 800;
 }
 
-.advice-grid {
+.advice-list {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin-bottom: 18px;
+  margin: -2px 0 2px;
 }
 
-.advice-card {
-  min-height: 138px;
-  padding: 14px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  background: #fffdf7;
+.advice-row {
+  display: grid;
+  grid-template-columns: 42px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
 }
 
-.advice-card span {
+.advice-row:last-child {
+  border-bottom: 0;
+}
+
+.advice-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border: 1px solid #d8e4dc;
+  border-radius: 6px;
+  background: #f1f7f3;
+  color: var(--accent);
+}
+
+.advice-row > div > span {
   color: #9a6219;
   font-size: 0.82rem;
   font-weight: 900;
 }
 
-.advice-card strong {
+.advice-row strong {
   display: block;
-  margin-top: 10px;
+  margin-top: 4px;
   color: var(--text-strong);
-  font-size: 1.25rem;
+  font-size: 1.05rem;
+  line-height: 1.35;
 }
 
-.advice-card p,
+.advice-row p,
 .product-advice,
 .empty-state,
 .detail-list p,
@@ -711,7 +810,7 @@ button:disabled {
 
 .calendar-day {
   display: grid;
-  grid-template-rows: auto 1fr auto;
+  grid-template-rows: auto 1fr;
   gap: 4px;
   align-items: start;
   padding: 8px;
@@ -719,26 +818,65 @@ button:disabled {
   text-align: left;
 }
 
-.calendar-day > span {
+.calendar-day-number {
   color: var(--text-strong);
   font-size: 0.8rem;
 }
 
-.calendar-day > strong {
+.calendar-day-details {
+  display: grid;
+  gap: 6px;
   align-self: end;
+}
+
+.calendar-day-details strong {
   color: var(--text-strong);
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.2;
 }
 
-.calendar-day > em {
-  justify-self: start;
-  padding: 3px 5px;
-  border-radius: 4px;
-  font-size: 0.66rem;
-  font-style: normal;
-  font-weight: 900;
+.calendar-source-dots {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.source-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #7d8791;
+}
+
+.source-dot.meal {
+  background: #267a53;
+}
+
+.source-dot.barcode {
+  background: #6c4db4;
+}
+
+.source-dot.manual {
+  background: #7d8791;
+}
+
+.calendar-source-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: -4px 0 10px;
+}
+
+.calendar-source-legend > span {
+  display: inline-flex;
+  gap: 5px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+  font-weight: 700;
 }
 
 .calendar-day.selected {
@@ -902,6 +1040,19 @@ button:disabled {
 
 .food-entry > div:last-child {
   justify-items: end;
+}
+
+.food-entry-source {
+  display: flex !important;
+  flex-wrap: wrap;
+  gap: 6px !important;
+  align-items: center;
+}
+
+.food-entry .source-badge {
+  min-height: 24px;
+  padding: 3px 6px;
+  font-size: 0.66rem !important;
 }
 
 .food-entry span,
@@ -1248,7 +1399,22 @@ button:disabled {
 @media (max-width: 620px) {
   .app-shell {
     width: min(100% - 20px, 540px);
-    padding-top: 14px;
+    padding: 14px 0 92px;
+  }
+
+  .app-header {
+    display: flex;
+    margin-bottom: 18px;
+    padding-bottom: 12px;
+  }
+
+  .brand img {
+    width: 42px;
+    height: 42px;
+  }
+
+  .brand strong {
+    font-size: 1.08rem;
   }
 
   .product-heading,
@@ -1256,8 +1422,10 @@ button:disabled {
     padding: 16px;
   }
 
-  .advice-grid,
-  .product-nutrients,
+  .product-nutrients {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .summary-callouts,
   .log-controls {
     grid-template-columns: 1fr;
@@ -1277,14 +1445,52 @@ button:disabled {
   }
 
   .page-tabs {
-    grid-template-columns: 1fr;
+    position: fixed;
+    z-index: 50;
+    left: 50%;
+    bottom: max(8px, env(safe-area-inset-bottom));
+    width: min(calc(100% - 20px), 520px);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 3px;
+    padding: 6px;
+    transform: translateX(-50%);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: rgba(255, 255, 255, 0.96);
+    box-shadow: 0 12px 32px rgba(24, 39, 31, 0.18);
+    backdrop-filter: blur(12px);
   }
 
   .page-tab {
-    min-height: 48px;
+    display: flex;
+    min-height: 58px;
+    gap: 3px;
+    flex-direction: column;
+    justify-content: center;
+    padding: 5px 3px;
+    border-color: transparent;
+    text-align: center;
   }
 
-  .page-tab span {
+  .page-tab > svg {
+    width: 19px;
+    height: 19px;
+  }
+
+  .page-tab-copy {
+    display: block;
+  }
+
+  .page-tab-copy strong {
+    display: block;
+    overflow: visible;
+    font-size: 0.68rem;
+    line-height: 1.15;
+    text-overflow: clip;
+    white-space: normal;
+  }
+
+  .page-tab-copy > span {
     display: none;
   }
 
@@ -1310,13 +1516,17 @@ button:disabled {
     padding: 5px;
   }
 
-  .calendar-day > strong {
+  .calendar-day-details strong {
     font-size: 0.58rem;
   }
 
-  .calendar-day > em {
-    padding: 2px 3px;
-    font-size: 0.58rem;
+  .calendar-source-dots {
+    gap: 3px;
+  }
+
+  .source-dot {
+    width: 6px;
+    height: 6px;
   }
 
   .food-entry {

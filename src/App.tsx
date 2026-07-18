@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { CalendarDays, ScanBarcode, Utensils, type LucideIcon } from 'lucide-react'
 import heroImage from './assets/hero.png'
 import './App.css'
 import { getOwnerId } from './foodLog'
@@ -9,10 +10,10 @@ import ScanPage from './pages/ScanPage'
 
 type Page = 'meal' | 'scan' | 'calendar'
 
-const pages: { id: Page; path: string; label: string; description: string }[] = [
-  { id: 'meal', path: '/meal', label: '급식 영양', description: '급식표와 섭취량' },
-  { id: 'scan', path: '/scan', label: '바코드·분리배출', description: '제품 영양과 포장' },
-  { id: 'calendar', path: '/calendar', label: '푸드 캘린더', description: '하루 영양 기록' },
+const pages: { id: Page; path: string; label: string; description: string; icon: LucideIcon }[] = [
+  { id: 'meal', path: '/meal', label: '급식 영양', description: '급식표와 섭취량', icon: Utensils },
+  { id: 'scan', path: '/scan', label: '바코드·분리배출', description: '제품 영양과 포장', icon: ScanBarcode },
+  { id: 'calendar', path: '/calendar', label: '푸드 캘린더', description: '하루 영양 기록', icon: CalendarDays },
 ]
 
 function pageFromPath(): Page {
@@ -63,7 +64,8 @@ function App() {
         <nav className="page-tabs" aria-label="주요 페이지">
           {pages.map((item) => (
             <button className={page === item.id ? 'page-tab active' : 'page-tab'} key={item.id} type="button" onClick={() => navigate(item.id)} aria-current={page === item.id ? 'page' : undefined}>
-              <strong>{item.label}</strong><span>{item.description}</span>
+              <item.icon aria-hidden="true" size={20} strokeWidth={2.2} />
+              <span className="page-tab-copy"><strong>{item.label}</strong><span>{item.description}</span></span>
             </button>
           ))}
         </nav>

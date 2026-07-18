@@ -1,4 +1,6 @@
 import { useCallback, useMemo, useState } from 'react'
+import { Drumstick, Leaf, Soup, Wheat, type LucideIcon } from 'lucide-react'
+import DataSourceBadge from '../components/DataSourceBadge'
 import { saveFoodLog } from '../foodLog'
 import {
   activityOptions,
@@ -81,6 +83,8 @@ const categoryWeights: Record<TrayCategory, Nutrients> = {
   side: { kcal: 0.7, carbs: 0.7, protein: 0.5, fat: 0.6, sodium: 1, calcium: 1.2, iron: 1.2 },
   dessert: { kcal: 0.8, carbs: 1, protein: 0.5, fat: 0.4, sodium: 0.3, calcium: 1.5, iron: 0.2 },
 }
+
+const adviceIcons: LucideIcon[] = [Wheat, Soup, Drumstick, Leaf]
 
 function classifyDish(name: string): TrayCategory {
   if (/밥|라이스|죽|볶음밥/.test(name)) return 'rice'
@@ -298,6 +302,7 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
           <span>NEIS 공공데이터</span>
           <h1 id="meal-title">급식 영양과 섭취량</h1>
           <p>학교 급식표를 불러와 영양소를 비교하고, 실제로 먹을 양을 판단합니다.</p>
+          <div className="page-source-row"><DataSourceBadge label="NEIS 급식식단정보 API" /><span className="data-mode">{isLiveMeal ? '조회 데이터' : '조회 전 예시'}</span></div>
         </div>
         <button className={isLiveMeal ? 'primary-button' : 'secondary-button'} type="button" onClick={saveMeal}>{isLiveMeal ? '담은 급식 기록' : '급식 조회 후 기록'}</button>
       </header>
@@ -348,7 +353,10 @@ export default function MealPage({ ownerId, gender, activity, onGenderChange, on
         <div className="page-stack compact">
           <article className="panel">
             <div className="panel-heading"><span>섭취 조절</span><h2>얼마나 먹을까?</h2></div>
-            <div className="advice-grid">{advice.map((item) => <div className="advice-card" key={item.label}><span>{item.label}</span><strong>{item.amount}</strong><p>{item.reason}</p></div>)}</div>
+            <div className="advice-list">{advice.map((item, index) => {
+              const AdviceIcon = adviceIcons[index] ?? Wheat
+              return <div className="advice-row" key={item.label}><span className="advice-icon"><AdviceIcon aria-hidden="true" size={20} strokeWidth={2.1} /></span><div><span>{item.label}</span><strong>{item.amount}</strong><p>{item.reason}</p></div></div>
+            })}</div>
           </article>
           <article className="panel">
             <div className="panel-heading"><span>영양 비교</span><h2>점심 목표 대비</h2></div>

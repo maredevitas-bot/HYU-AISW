@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { loadFoodLog, removeFoodLog, saveFoodLog, type FoodLogEntry } from '../foodLog'
+import DataSourceBadge from '../components/DataSourceBadge'
+import { loadFoodLog, removeFoodLog, saveFoodLog, type FoodLogEntry, type FoodLogSource } from '../foodLog'
 import {
   emptyNutrients,
   formatNutrient,
@@ -19,6 +20,8 @@ type CalendarPageProps = {
 
 const weekDays = ['월', '화', '수', '목', '금', '토', '일']
 const mealTypeLabels = { breakfast: '아침', lunch: '점심', dinner: '저녁', snack: '간식' }
+const sourceOrder: FoodLogSource[] = ['meal', 'barcode', 'manual']
+const sourceLabels: Record<FoodLogSource, string> = { meal: '급식', barcode: '바코드', manual: '직접 기록' }
 
 function monthValue(date: string) {
   return date.slice(0, 7)
@@ -42,6 +45,14 @@ function monthCells(month: string) {
 
 function hasNutrition(entry: FoodLogEntry) {
   return nutrientMeta.some(({ key }) => entry.nutrients[key] > 0)
+}
+
+function entrySourceLabel(entry: FoodLogEntry) {
+  const metadataSource = typeof entry.metadata.source === 'string' ? entry.metadata.source : ''
+  if (metadataSource) return metadataSource
+  if (entry.source === 'meal') return 'NEIS 급식식단정보 API'
+  if (entry.source === 'barcode') return '바코드 공공데이터'
+  return '직접 기록'
 }
 
 export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps) {
@@ -126,6 +137,7 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
       <div className="calendar-layout">
         <article className="panel calendar-panel">
           <div className="calendar-summary"><strong>{month.replace('-', '년 ')}월</strong><span>{status}</span></div>
+          <div className="calendar-source-legend" aria-label="기록 종류"><span><i className="source-dot meal" />급식</span><span><i className="source-dot barcode" />바코드</span><span><i className="source-dot manual" />직접 기록</span></div>
           <div className="week-header">{weekDays.map((day) => <span key={day}>{day}</span>)}</div>
           <div className="calendar-grid">
             {cells.map((date, index) => {
@@ -133,10 +145,12 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
               const dayEntries = byDate[date] ?? []
               const nutritionEntries = dayEntries.filter(hasNutrition)
               const total = sumNutrients(nutritionEntries.map((entry) => entry.nutrients))
+              const daySources = sourceOrder.filter((source) => dayEntries.some((entry) => entry.source === source))
+              const sourceDescription = daySources.map((source) => sourceLabels[source]).join(', ')
               return (
-                <button className={`calendar-day ${selectedDate === date ? 'selected' : ''}`} key={date} type="button" onClick={() => setSelectedDate(date)}>
-                  <span>{Number(date.slice(-2))}</span>
-                  {dayEntries.length > 0 && <><strong>{nutritionEntries.length ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : '영양 정보 없음'}</strong><em className="logged">기록 {dayEntries.length}개</em></>}
+                <button aria-label={`${date}${dayEntries.length ? `, ${dayEntries.length}개 기록, ${sourceDescription}` : ', 기록 없음'}`} className={`calendar-day ${selectedDate === date ? 'selected' : ''}`} key={date} type="button" onClick={() => setSelectedDate(date)}>
+                  <span className="calendar-day-number">{Number(date.slice(-2))}</span>
+                  {dayEntries.length > 0 && <div className="calendar-day-details"><strong>{nutritionEntries.length ? `${Math.round(total.kcal).toLocaleString('ko-KR')} kcal` : `${dayEntries.length}개 기록`}</strong><span className="calendar-source-dots" aria-hidden="true">{daySources.map((source) => <i className={`source-dot ${source}`} key={source} />)}</span></div>}
                 </button>
               )
             })}
@@ -158,7 +172,7 @@ export default function CalendarPage({ ownerId, refreshKey }: CalendarPageProps)
               <label><span>{selectedDate}에 음식 직접 기록</span><div><input aria-label="직접 기록할 음식 이름" value={manualFoodName} onChange={(event) => setManualFoodName(event.target.value)} placeholder="예: 떡볶이, 집에서 먹은 샌드위치" maxLength={120} /><button className="primary-button" type="submit">추가</button></div></label>
               <p>음식 이름만 저장하며 영양 합계에는 포함하지 않습니다.</p>
             </form>
-            <div className="food-entry-list">{dailyEntries.map((entry) => <div className="food-entry" key={entry.id}><div><span>{entry.source === 'manual' ? '직접 기록' : mealTypeLabels[entry.mealType]}</span><strong>{entry.name}</strong><small>{entry.source === 'meal' ? `NEIS 급식 · ${entry.quantity}회분` : entry.source === 'barcode' ? `바코드 제품 · ${entry.quantity}회분` : '영양 정보 없음 · 합산 제외'}</small></div><div><strong>{entry.source === 'manual' ? '성분 미상' : `${Math.round(entry.nutrients.kcal).toLocaleString('ko-KR')} kcal`}</strong><button type="button" aria-label={`${entry.name} 기록 삭제`} onClick={() => void deleteEntry(entry)}>삭제</button></div></div>)}</div>
+            <div className="food-entry-list">{dailyEntries.map((entry) => <div className="food-entry" key={entry.id}><div><div className="food-entry-source"><span>{entry.source === 'manual' ? '직접 기록' : mealTypeLabels[entry.mealType]}</span><DataSourceBadge label={entrySourceLabel(entry)} tone={entry.source === 'manual' ? 'manual' : entrySourceLabel(entry).includes('Open Food Facts') ? 'community' : 'public'} /></div><strong>{entry.name}</strong><small>{entry.source === 'meal' ? `급식 · ${entry.quantity}회분` : entry.source === 'barcode' ? `바코드 제품 · ${entry.quantity}회분` : '영양 정보 없음 · 합산 제외'}</small></div><div><strong>{entry.source === 'manual' ? '성분 미상' : `${Math.round(entry.nutrients.kcal).toLocaleString('ko-KR')} kcal`}</strong><button type="button" aria-label={`${entry.name} 기록 삭제`} onClick={() => void deleteEntry(entry)}>삭제</button></div></div>)}</div>
           </article>
         </div>
       </div>
