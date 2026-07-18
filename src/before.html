@@ -1,0 +1,2157 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>오늘의 급식 · 영양 분석 · 분리수거</title>
+<style>
+  :root {
+    --green: #4CAF50; --green-light: #E8F5E9;
+    --orange: #FF9800; --orange-light: #FFF3E0;
+    --red: #F44336; --red-light: #FFEBEE;
+    --blue: #2196F3; --blue-light: #E3F2FD;
+    --purple: #9C27B0; --purple-light: #F3E5F5;
+    --teal: #009688; --teal-light: #E0F2F1;
+    --bg: #F5F6F8; --card: #FFFFFF;
+    --text: #333; --text-light: #777;
+    --radius: 16px; --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  }
+  body {
+    margin: 0; font-family: 'Noto Sans KR','Malgun Gothic',sans-serif;
+    background: var(--bg); color: var(--text); line-height: 1.6;
+  }
+  .container { max-width: 640px; margin: 0 auto; padding: 12px 16px 16px; }
+
+  .tab-nav {
+    display: flex; background: var(--card); border-radius: var(--radius);
+    box-shadow: var(--shadow); margin-bottom: 12px; overflow: hidden;
+  }
+  .tab-nav button {
+    flex: 1; padding: 8px 2px; border: none; background: none;
+    font-size: 11px; font-weight: 700; cursor: pointer; transition: all .2s;
+    border-bottom: 3px solid transparent; color: var(--text-light);
+  }
+  .tab-nav button.active { color: var(--green); border-bottom-color: var(--green); background: var(--green-light); }
+
+  .tab-page { display: none; }
+  .tab-page.active { display: block; }
+
+  .top-bar { display: flex; justify-content: flex-end; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+  .toggle-btn {
+    background: var(--card); border: 1px solid #ddd; border-radius: 20px;
+    padding: 6px 12px; font-size: 12px; cursor: pointer; transition: all .2s;
+  }
+  .toggle-btn.active { background: var(--green); color: #fff; border-color: var(--green); }
+
+  /* 언어 선택기 */
+  .lang-bar { display: flex; justify-content: flex-end; gap: 4px; margin-bottom: 6px; }
+  .lang-btn {
+    background: none; border: 1px solid transparent; border-radius: 16px;
+    padding: 4px 10px; font-size: 13px; cursor: pointer; transition: all .2s;
+  }
+  .lang-btn:hover { background: #eee; }
+  .lang-btn.active { background: var(--blue-light); border-color: var(--blue); color: var(--blue); font-weight: 700; }
+
+  .header { text-align: center; padding: 8px 0 8px; }
+  .header .date-badge {
+    display: inline-block; background: var(--green-light); color: var(--green);
+    font-weight: 700; padding: 6px 18px; border-radius: 20px; font-size: 14px; margin-bottom: 8px;
+  }
+  .header h1 { margin: 0; font-size: 26px; }
+  .header .sub { font-size: 14px; color: var(--text-light); margin-top: 4px; }
+
+  .section-title {
+    font-size: 18px; font-weight: 700; margin: 20px 0 12px;
+    display: flex; align-items: center; gap: 8px;
+  }
+  .section-title::before { content: ''; display: inline-block; width: 4px; height: 20px; background: var(--green); border-radius: 2px; }
+
+  .meal-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    margin-bottom: 8px; box-shadow: var(--shadow); display: flex;
+    align-items: center; gap: 12px; cursor: pointer; transition: all .2s; border: 2px solid transparent;
+  }
+  .meal-card.selected { border-color: var(--green); background: var(--green-light); }
+  .meal-card .emoji { font-size: 28px; flex-shrink: 0; }
+  .meal-card .info { flex: 1; min-width: 0; }
+  .meal-card .name { font-weight: 700; font-size: 15px; }
+  .meal-card .kcal { font-size: 13px; color: var(--orange); font-weight: 600; }
+  .meal-card .guide {
+    font-size: 12px; color: var(--text-light); margin-top: 2px;
+    background: var(--orange-light); display: inline-block; padding: 2px 8px; border-radius: 8px;
+  }
+  .meal-card .checkbox {
+    width: 22px; height: 22px; border-radius: 6px; border: 2px solid #ccc; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; transition: all .2s;
+  }
+  .meal-card.selected .checkbox { background: var(--green); border-color: var(--green); }
+  .meal-card.selected .checkbox::after { content: '\2713'; color: #fff; font-size: 14px; font-weight: 700; }
+
+  .config-toggle { display: flex; justify-content: flex-end; margin-bottom: 4px; }
+  .config-toggle button {
+    background: none; border: none; font-size: 18px; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  }
+  .config-toggle button:hover { background: #eee; }
+  .config-panel {
+    background: var(--card); border-radius: var(--radius); padding: 16px;
+    box-shadow: var(--shadow); margin-bottom: 12px; display: none;
+  }
+  .config-panel.open { display: block; }
+  .config-panel label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; color: var(--text-light); }
+  .config-panel input, .config-panel select {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px;
+    font-size: 14px; margin-bottom: 10px; box-sizing: border-box; background: var(--card);
+  }
+  .config-panel .row { display: flex; gap: 8px; }
+  .config-panel .row > div { flex: 1; }
+  .config-panel .btn-row { display: flex; gap: 8px; }
+  .config-panel .btn-row button {
+    flex: 1; padding: 10px; border-radius: 10px; border: none; font-size: 14px; cursor: pointer; font-weight: 600;
+  }
+  .btn-save { background: var(--green); color: #fff; }
+  .btn-fetch { background: var(--blue); color: #fff; }
+  .api-status {
+    padding: 10px 14px; border-radius: 10px; font-size: 13px; margin-bottom: 8px; display: none;
+  }
+  .api-status.show { display: block; }
+  .api-status.loading { background: var(--blue-light); color: var(--blue); }
+  .api-status.success { background: var(--green-light); color: var(--green); }
+  .api-status.error { background: var(--red-light); color: var(--red); }
+
+  .nutrition-panel {
+    background: var(--card); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow); margin-top: 16px;
+  }
+  .nutrition-panel .total-kcal { text-align: center; font-size: 36px; font-weight: 800; color: var(--green); margin-bottom: 4px; }
+  .nutrition-panel .kcal-label { text-align: center; font-size: 13px; color: var(--text-light); margin-bottom: 16px; }
+  .nutrient-row { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
+  .nutrient-row .label { width: 64px; font-size: 13px; font-weight: 600; text-align: right; }
+  .nutrient-row .bar-wrap { flex: 1; height: 14px; background: #eee; border-radius: 7px; overflow: hidden; }
+  .nutrient-row .bar-fill { height: 100%; border-radius: 7px; transition: width .5s ease; }
+  .nutrient-row .value { font-size: 12px; color: var(--text-light); min-width: 130px; text-align: left; }
+  .bar-carb { background: #FFB74D; }
+  .bar-protein { background: #4FC3F7; }
+  .bar-fat { background: #F06292; }
+
+  .summary-cards { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 16px; }
+  .summary-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px; text-align: center; box-shadow: var(--shadow);
+  }
+  .summary-card .value { font-size: 24px; font-weight: 800; }
+  .summary-card .label { font-size: 12px; color: var(--text-light); margin-top: 2px; }
+  .reset-btn {
+    display: block; width: 100%; margin-top: 12px; padding: 12px;
+    background: #fff; border: 1px solid #ddd; border-radius: 12px; font-size: 14px; cursor: pointer;
+  }
+  .reset-btn:hover { background: #f5f5f5; }
+
+  .barcode-input-group { display: flex; gap: 8px; margin-bottom: 12px; align-items: stretch; }
+  .barcode-input-group input {
+    flex: 1; padding: 14px 16px; border: 2px solid #ddd; border-radius: 14px;
+    font-size: 16px; background: var(--card); box-sizing: border-box;
+  }
+  .barcode-input-group input:focus { outline: none; border-color: var(--teal); }
+  .barcode-input-group button {
+    padding: 14px 20px; border: none; border-radius: 14px;
+    background: var(--teal); color: #fff; font-size: 15px; font-weight: 700; cursor: pointer; white-space: nowrap;
+  }
+  .quick-barcodes { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; align-items: center; }
+  .quick-barcode {
+    background: var(--card); border: 1px solid #ddd; border-radius: 20px;
+    padding: 5px 12px; font-size: 12px; cursor: pointer; color: var(--text-light);
+  }
+  .quick-barcode:hover { border-color: var(--teal); color: var(--teal); }
+
+  .product-card {
+    background: var(--card); border-radius: var(--radius); padding: 16px; box-shadow: var(--shadow); margin-bottom: 12px;
+  }
+  .product-card .product-header { display: flex; gap: 14px; align-items: center; margin-bottom: 12px; }
+  .product-card .product-img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; background: #eee; }
+  .product-card .product-name { font-size: 17px; font-weight: 800; }
+  .product-card .product-brand { font-size: 13px; color: var(--text-light); }
+  .recycle-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    box-shadow: var(--shadow); margin-bottom: 8px; display: flex; align-items: center; gap: 12px;
+    border-left: 4px solid var(--teal);
+  }
+  .recycle-card .r-icon {
+    font-size: 32px; width: 44px; height: 44px; display: flex; align-items: center; justify-content: center;
+    background: var(--teal-light); border-radius: 12px; flex-shrink: 0;
+  }
+  .recycle-card .r-info { flex: 1; min-width: 0; }
+  .recycle-card .r-bin { font-weight: 700; font-size: 15px; color: var(--teal); }
+  .recycle-card .r-method { font-size: 13px; margin-top: 2px; color: var(--text); }
+
+  .recycle-tips {
+    background: var(--green-light); border-radius: var(--radius); padding: 14px 18px;
+    box-shadow: var(--shadow); margin-top: 12px;
+  }
+  .recycle-tips h4 { margin: 0 0 6px; color: var(--green); font-size: 14px; }
+  .recycle-tips li { font-size: 13px; margin-bottom: 3px; color: var(--text-light); }
+  .recycle-tips ul { margin: 0; padding-left: 18px; }
+  .recent-list { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+  .recent-item {
+    background: var(--card); border: 1px solid #ddd; border-radius: 20px;
+    padding: 4px 10px; font-size: 12px; cursor: pointer; color: var(--text-light);
+  }
+  .recent-item:hover { border-color: var(--teal); }
+  .meta-text { font-size: 12px; color: var(--text-light); padding: 4px 8px; }
+
+  /* 시간표 */
+  .timetable-row {
+    display: flex; align-items: center; gap: 12px; padding: 12px 14px;
+    background: var(--card); border-radius: 12px; margin-bottom: 6px;
+    box-shadow: var(--shadow); border-left: 4px solid transparent; transition: all .2s;
+  }
+  .timetable-row.now { border-left-color: var(--blue); background: var(--blue-light); }
+  .timetable-row.lunch { border-left-color: var(--orange); background: var(--orange-light); }
+  .timetable-row .tt-time {
+    font-size: 13px; font-weight: 700; color: var(--text-light); min-width: 90px; text-align: center;
+  }
+  .timetable-row .tt-subject { flex: 1; font-size: 15px; font-weight: 600; }
+  .timetable-row .tt-edit-btn {
+    background: none; border: none; font-size: 16px; cursor: pointer; padding: 4px 8px; border-radius: 8px;
+  }
+  .timetable-row .tt-edit-btn:hover { background: #eee; }
+  .tt-edit-inline { display: flex; gap: 6px; align-items: center; flex: 1; }
+  .tt-edit-inline input {
+    flex: 1; padding: 6px 10px; border: 1px solid #ddd; border-radius: 8px; font-size: 14px;
+  }
+  .tt-edit-inline button {
+    padding: 6px 10px; border: none; border-radius: 8px; font-size: 12px; cursor: pointer;
+  }
+  .tt-edit-save { background: var(--green); color: #fff; }
+  .tt-edit-cancel { background: #eee; }
+
+  .tt-selector {
+    display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap;
+  }
+  .tt-day-btn {
+    background: var(--card); border: 1px solid #ddd; border-radius: 20px;
+    padding: 5px 12px; font-size: 13px; cursor: pointer;
+  }
+  .tt-day-btn.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+
+  /* 키오스크 */
+  .kiosk-upload {
+    border: 3px dashed #ccc; border-radius: var(--radius); padding: 32px 20px;
+    text-align: center; cursor: pointer; transition: all .2s; background: var(--card);
+  }
+  .kiosk-upload:hover { border-color: var(--purple); background: var(--purple-light); }
+  .kiosk-upload .upload-icon { font-size: 48px; margin-bottom: 8px; }
+  .kiosk-upload .upload-text { font-size: 15px; font-weight: 600; }
+  .kiosk-upload .upload-hint { font-size: 12px; color: var(--text-light); margin-top: 4px; }
+  .kiosk-upload input { display: none; }
+
+  .kiosk-preview { position: relative; margin-bottom: 12px; }
+  .kiosk-preview img { width: 100%; border-radius: var(--radius); max-height: 300px; object-fit: contain; background: #eee; }
+  .kiosk-preview .remove-btn {
+    position: absolute; top: 8px; right: 8px; background: var(--red); color: #fff;
+    border: none; border-radius: 50%; width: 28px; height: 28px; font-size: 14px; cursor: pointer;
+  }
+
+  .kiosk-step {
+    background: var(--card); border-radius: var(--radius); padding: 14px 16px;
+    box-shadow: var(--shadow); margin-bottom: 8px; display: flex; align-items: flex-start; gap: 12px;
+  }
+  .kiosk-step .step-num {
+    width: 32px; height: 32px; background: var(--purple); color: #fff; border-radius: 50%;
+    display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 15px; flex-shrink: 0;
+  }
+  .kiosk-step .step-text { flex: 1; font-size: 14px; line-height: 1.5; }
+
+  .kiosk-api-setup { margin-bottom: 12px; }
+  .kiosk-api-setup input {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px;
+    font-size: 14px; box-sizing: border-box; margin-bottom: 8px; background: var(--card);
+  }
+
+  /* 신고 */
+  .report-form { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .report-form select, .report-form textarea, .report-form input[type=text] {
+    width: 100%; padding: 10px 12px; border: 1px solid #ddd; border-radius: 10px;
+    font-size: 14px; box-sizing: border-box; background: var(--card); font-family: inherit;
+  }
+  .report-form textarea { min-height: 80px; resize: vertical; }
+  .report-form .loc-row { display: flex; gap: 8px; }
+  .report-form .loc-row input { flex: 1; }
+  .report-form .loc-row button {
+    padding: 10px 14px; border: none; border-radius: 10px; background: var(--blue); color: #fff; font-size: 13px; cursor: pointer; white-space: nowrap;
+  }
+  .report-img-upload {
+    border: 2px dashed #ccc; border-radius: 12px; padding: 20px; text-align: center; cursor: pointer; transition: all .2s;
+  }
+  .report-img-upload:hover { border-color: var(--orange); background: var(--orange-light); }
+  .report-img-upload input { display: none; }
+  .report-img-preview { position: relative; display: inline-block; }
+  .report-img-preview img { width: 100px; height: 100px; border-radius: 10px; object-fit: cover; }
+  .report-img-preview .rm-btn {
+    position: absolute; top: -6px; right: -6px; background: var(--red); color: #fff;
+    border: none; border-radius: 50%; width: 22px; height: 22px; font-size: 12px; cursor: pointer;
+  }
+
+  .report-card {
+    background: var(--card); border-radius: var(--radius); padding: 14px; box-shadow: var(--shadow); margin-bottom: 10px;
+  }
+  .report-card .report-header { display: flex; gap: 12px; margin-bottom: 8px; }
+  .report-card .report-thumb { width: 60px; height: 60px; border-radius: 10px; object-fit: cover; background: #eee; }
+  .report-card .report-meta { flex: 1; min-width: 0; }
+  .report-card .report-type { font-weight: 700; font-size: 15px; }
+  .report-card .report-loc { font-size: 12px; color: var(--text-light); }
+  .report-card .report-desc { font-size: 13px; margin-bottom: 6px; }
+  .report-card .report-footer { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: var(--text-light); }
+  .report-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 11px; font-weight: 700;
+  }
+  .report-badge.new { background: var(--blue-light); color: var(--blue); }
+  .report-badge.check { background: var(--orange-light); color: var(--orange); }
+  .report-badge.done { background: var(--green-light); color: var(--green); }
+
+  /* 수량 조절 */
+  .count-control { display: flex; align-items: center; gap: 6px; margin-top: 6px; }
+  .count-control button {
+    width: 28px; height: 28px; border-radius: 50%; border: 2px solid var(--green);
+    background: #fff; color: var(--green); font-size: 16px; font-weight: 700; cursor: pointer;
+    display: flex; align-items: center; justify-content: center; line-height: 1;
+  }
+  .count-control button:hover { background: var(--green); color: #fff; }
+  .count-control .count-val {
+    font-size: 14px; font-weight: 700; min-width: 60px; text-align: center; color: var(--green);
+  }
+
+  body.eldermode { font-size: 20px; }
+  body.eldermode .header h1 { font-size: 32px; }
+  body.eldermode .meal-card .name, body.eldermode .recycle-card .r-bin { font-size: 20px; }
+  body.eldermode .meal-card .kcal, body.eldermode .recycle-card .r-method { font-size: 16px; }
+  body.eldermode .meal-card .guide { font-size: 15px; }
+  body.eldermode .section-title { font-size: 22px; }
+  body.eldermode .nutrition-panel .total-kcal { font-size: 44px; }
+  body.eldermode .nutrient-row .label { font-size: 16px; width: 80px; }
+  body.eldermode .nutrient-row .value { font-size: 14px; }
+  body.eldermode .summary-card .value { font-size: 28px; }
+  body.eldermode .summary-card .label { font-size: 14px; }
+  body.eldermode .config-panel input, body.eldermode .config-panel select { font-size: 17px; padding: 12px; }
+  body.eldermode .barcode-input-group input { font-size: 20px; }
+  body.eldermode .barcode-input-group button { font-size: 18px; }
+  body.eldermode .recycle-tips li { font-size: 15px; }
+  /* 노약자 모드: 기본 버튼 숨기고 전용 버튼 표시 */
+  body.eldermode .quick-barcodes-default { display: none; }
+  body:not(.eldermode) .quick-barcodes-elder { display: none; }
+  body.eldermode .quick-foods-default { display: none; }
+  body:not(.eldermode) .quick-foods-elder { display: none; }
+
+  /* 음성인식 FAB */
+  .voice-fab {
+    display: none; position: fixed; bottom: 24px; right: 24px; z-index: 999;
+    width: 56px; height: 56px; border-radius: 50%; background: var(--red);
+    color: #fff; border: none; font-size: 24px; cursor: pointer;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.2); transition: all .2s;
+  }
+  .voice-fab:hover { transform: scale(1.1); }
+  .voice-fab.listening { background: #D32F2F; animation: pulse 1.2s infinite; }
+  @keyframes pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(244,67,54,0.4); }
+    50% { box-shadow: 0 0 0 16px rgba(244,67,54,0); }
+  }
+  body.eldermode .voice-fab { display: flex; align-items: center; justify-content: center; }
+
+  /* 기본/큰글씨 모드: 급식 탭 숨기기 */
+  body:not(.studentmode) .tab-nav button[data-tab="meal"] { display: none; }
+  body:not(.studentmode) #tab-meal { display: none !important; }
+  body:not(.studentmode) #tab-meal.active { display: none !important; }
+
+  /* 기본/학생 모드: 키오스크 탭 숨기기 */
+  body:not(.eldermode) .tab-nav button[data-tab="kiosk"] { display: none; }
+  body:not(.eldermode) #tab-kiosk { display: none !important; }
+  body:not(.eldermode) #tab-kiosk.active { display: none !important; }
+
+  /* 학생 모드 */
+  body.studentmode {
+    --bg: #FFF8E1; --card: #FFFFFF;
+    --green: #FF6F00; --green-light: #FFF3E0;
+    --orange: #E91E63; --orange-light: #FCE4EC;
+    --blue: #03A9F4; --blue-light: #E1F5FE;
+    --purple: #7C4DFF; --purple-light: #EDE7F6;
+    --teal: #00BCD4; --teal-light: #E0F7FA;
+    --text: #333; --text-light: #888;
+    background: linear-gradient(135deg, #FFF8E1 0%, #FFECB3 50%, #FFE0B2 100%);
+    min-height: 100vh;
+  }
+  body.studentmode .tab-nav button.active {
+    color: var(--green); border-bottom-color: var(--green); background: var(--green-light);
+  }
+  body.studentmode .header h1 {
+    background: linear-gradient(135deg, #FF6F00, #E91E63, #7C4DFF);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-size: 28px; font-weight: 900;
+  }
+  body.studentmode .header .date-badge {
+    background: linear-gradient(135deg, #FFD54F, #FFAB40); color: #fff; font-size: 15px;
+  }
+  body.studentmode .section-title::before {
+    background: linear-gradient(180deg, #E91E63, #FF6F00); border-radius: 3px;
+  }
+  body.studentmode .meal-card {
+    border-radius: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+    transition: transform .2s, box-shadow .2s;
+  }
+  body.studentmode .meal-card:hover { transform: translateY(-2px); box-shadow: 0 6px 24px rgba(0,0,0,0.12); }
+  body.studentmode .meal-card.selected {
+    border-color: var(--purple); background: var(--purple-light);
+  }
+  body.studentmode .meal-card .emoji { font-size: 36px; }
+  body.studentmode .meal-card .kcal { color: #E91E63; }
+  body.studentmode .meal-card .guide { background: var(--purple-light); color: var(--purple); }
+  body.studentmode .nutrition-panel .total-kcal { color: var(--purple); }
+  body.studentmode .bar-carb { background: linear-gradient(90deg, #FFD54F, #FF9800); }
+  body.studentmode .bar-protein { background: linear-gradient(90deg, #4FC3F7, #0288D1); }
+  body.studentmode .bar-fat { background: linear-gradient(90deg, #F48FB1, #E91E63); }
+  body.studentmode .summary-card { border-radius: 20px; }
+  body.studentmode .summary-card .value { font-size: 26px; }
+  body.studentmode .toggle-btn.active {
+    background: linear-gradient(135deg, #FF6F00, #E91E63); color: #fff; border-color: transparent;
+  }
+  body.studentmode .barcode-input-group input:focus { border-color: var(--purple); }
+  body.studentmode .barcode-input-group button { background: var(--purple); }
+  body.studentmode .recycle-card { border-left-color: var(--purple); }
+  body.studentmode .recycle-card .r-bin { color: var(--purple); }
+  body.studentmode .recycle-card .r-icon { background: var(--purple-light); }
+  body.studentmode .footer {
+    background: linear-gradient(135deg, #FF6F00, #E91E63);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    font-weight: 700;
+  }
+  body.studentmode .kiosk-step .step-num { background: var(--purple); }
+  body.studentmode .report-card { border-radius: 20px; }
+  body.studentmode .btn-save { background: var(--purple); }
+  body.studentmode .btn-fetch { background: var(--green); }
+  body.studentmode .tt-day-btn.active { background: var(--purple); border-color: var(--purple); }
+  .footer { text-align: center; padding: 20px; font-size: 12px; color: var(--text-light); }
+</style>
+</head>
+<body>
+
+<div class="container">
+  <!-- 언어 선택 -->
+  <div class="lang-bar" id="langBar">
+    <button class="lang-btn active" data-lang="ko" onclick="setLang('ko')">한국어</button>
+    <button class="lang-btn" data-lang="en" onclick="setLang('en')">English</button>
+    <button class="lang-btn" data-lang="zh-CN" onclick="setLang('zh-CN')">中文</button>
+    <button class="lang-btn" data-lang="vi" onclick="setLang('vi')">Tiếng Việt</button>
+    <button class="lang-btn" data-lang="ja" onclick="setLang('ja')">日本語</button>
+  </div>
+
+  <!-- 모드 토글 -->
+  <div class="top-bar">
+    <button class="toggle-btn" id="normalModeBtn" onclick="setMode('normal')" data-i18n="btn_normal">기본</button>
+    <button class="toggle-btn" id="elderModeBtn" onclick="setMode('elder')" data-i18n="btn_elder">큰 글씨 모드</button>
+    <button class="toggle-btn" id="studentModeBtn" onclick="setMode('student')" data-i18n="btn_student">학생 모드</button>
+  </div>
+
+  <!-- 탭 -->
+  <div class="tab-nav">
+    <button class="active" data-tab="meal" onclick="switchTab('meal')" data-i18n="tab_meal">🍽️ 급식 분석</button>
+    <button data-tab="recycle" onclick="switchTab('recycle')" data-i18n="tab_recycle">♻️ 분리수거 안내</button>
+    <button data-tab="restaurant" onclick="switchTab('restaurant')" data-i18n="tab_restaurant">🍜 음식점 메뉴</button>
+    <button data-tab="kiosk" onclick="switchTab('kiosk')" data-i18n="tab_kiosk">📱 키오스크</button>
+    <button data-tab="report" onclick="switchTab('report')" data-i18n="tab_report">✏️ 신고</button>
+    <button data-tab="board" onclick="switchTab('board')" data-i18n="tab_board">🛡️ 게시판</button>
+  </div>
+
+  <!-- ==================== 급식 분석 ==================== -->
+  <div class="tab-page active" id="tab-meal">
+    <div class="config-toggle">
+      <button id="configToggleBtn" onclick="toggleConfig()">⚙️</button>
+    </div>
+    <div class="config-panel" id="configPanel">
+      <label for="apiKey" data-i18n="label_api_key">API 인증키 (공공데이터포털)</label>
+      <input type="text" id="apiKey" data-i18n-ph="ph_api_key" placeholder="인증키를 입력하세요">
+      <div class="row">
+        <div>
+          <label for="officeCode" data-i18n="label_office">교육청 코드</label>
+          <select id="officeCode">
+            <option value="">선택</option>
+            <option value="B10">서울</option><option value="C10">부산</option>
+            <option value="D10">대구</option><option value="E10">인천</option>
+            <option value="F10">광주</option><option value="G10">대전</option>
+            <option value="H10">울산</option><option value="I10">세종</option>
+            <option value="J10">경기</option><option value="K10">강원</option>
+            <option value="M10">충북</option><option value="N10">충남</option>
+            <option value="P10">전북</option><option value="Q10">전남</option>
+            <option value="R10">경북</option><option value="S10">경남</option>
+            <option value="T10">제주</option>
+          </select>
+        </div>
+        <div>
+          <label for="schoolCode" data-i18n="label_school">학교 코드</label>
+          <input type="text" id="schoolCode" data-i18n-ph="ph_school" placeholder="예: 7010083">
+        </div>
+      </div>
+      <label for="proxyUrl" data-i18n="label_proxy">CORS 프록시 URL (선택)</label>
+      <input type="text" id="proxyUrl" data-i18n-ph="ph_proxy" placeholder="CORS 우회 프록시 주소">
+      <div class="btn-row">
+        <button class="btn-save" onclick="saveApiConfig()" data-i18n="btn_save">설정 저장</button>
+        <button class="btn-fetch" onclick="fetchMealApi()" data-i18n="btn_fetch">급식 불러오기</button>
+      </div>
+      <div class="api-status" id="apiStatus"></div>
+    </div>
+
+    <div class="header">
+      <div class="date-badge" id="dateBadge"></div>
+      <h1 data-i18n="meal_title">오늘의 급식</h1>
+      <div class="sub" data-i18n="meal_subtitle">영양 분석 · 섭취 가이드</div>
+    </div>
+    <div class="section-title" data-i18n="meal_menu">점심 메뉴</div>
+    <div id="mealList"></div>
+    <div class="section-title" data-i18n="meal_nutrition">영양 섭취 현황</div>
+    <div class="nutrition-panel">
+      <div class="total-kcal" id="totalKcal">0</div>
+      <div class="kcal-label" data-i18n="kcal_label_text">총 섭취 칼로리</div>
+      <div id="nutrientBars"></div>
+    </div>
+    <div class="section-title" data-i18n="meal_summary">한눈에 보기</div>
+    <div class="summary-cards">
+      <div class="summary-card"><div class="value" id="cardKcal" style="color:#4CAF50;">0</div><div class="label" data-i18n="meal_kcal_label">kcal 섭취</div></div>
+      <div class="summary-card"><div class="value" id="cardPercent" style="color:#FF9800;">0%</div><div class="label" data-i18n="meal_percent_label">1일 권장 대비</div></div>
+      <div class="summary-card"><div class="value" id="cardGuide" style="color:#4FC3F7;font-size:16px">-</div><div class="label" data-i18n="meal_guide_label">밥양 가이드</div></div>
+      <div class="summary-card"><div class="value" id="cardBalance" style="color:#F06292;font-size:16px">-</div><div class="label" data-i18n="meal_balance_label">영양 균형</div></div>
+    </div>
+    <button class="reset-btn" onclick="resetAll()" data-i18n="btn_reset">전체 선택 해제하기</button>
+    <div class="section-title" data-i18n="tt_title">오늘의 시간표</div>
+    <div class="tt-selector" id="ttDaySelector"></div>
+    <div id="timetableContainer"></div>
+  </div>
+
+  <!-- ==================== 분리수거 ==================== -->
+  <div class="tab-page" id="tab-recycle">
+    <div class="header">
+      <h1 data-i18n="recycle_title">분리수거 안내</h1>
+      <div class="sub" data-i18n="recycle_subtitle">바코드로 상품의 분리수거 방법을 확인하세요</div>
+    </div>
+    <div class="barcode-input-group">
+      <input type="text" id="barcodeInput" data-i18n-ph="recycle_placeholder" placeholder="바코드 13자리 숫자를 입력하세요" maxlength="13" onkeydown="if(event.key==='Enter')searchBarcode()">
+      <button onclick="searchBarcode()" data-i18n="recycle_search_btn">검색</button>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+      <span style="font-size:13px;color:var(--text-light)">또는</span>
+      <label style="flex:1;padding:10px;border:2px dashed #ccc;border-radius:12px;text-align:center;cursor:pointer;font-size:13px;color:var(--teal)" onmouseover="this.style.borderColor='var(--teal)'" onmouseout="this.style.borderColor='#ccc'">
+        📷 바코드 사진으로 검색
+        <input type="file" accept="image/*" style="display:none" onchange="scanBarcodeImage(event)">
+      </label>
+    </div>
+    <div class="quick-barcodes quick-barcodes-default">
+      <span style="font-size:13px;color:var(--text-light);padding:5px 0;" data-i18n="recycle_quick_search">빠른 검색:</span>
+      <button class="quick-barcode" onclick="quickSearch('5449000000996')">콜라</button>
+      <button class="quick-barcode" onclick="quickSearch('7622300336738')">오레오</button>
+      <button class="quick-barcode" onclick="quickSearch('3017620422003')">누텔라</button>
+      <button class="quick-barcode" onclick="quickSearch('8000500310427')">킨더</button>
+      <button class="quick-barcode" onclick="quickSearch('5000159363791')">킷캣</button>
+    </div>
+    <div class="quick-barcodes quick-barcodes-elder">
+      <span style="font-size:13px;color:var(--text-light);padding:5px 0;" data-i18n="recycle_quick_search">빠른 검색:</span>
+      <button class="quick-barcode" onclick="quickSearch('8801056099314')">영양제</button>
+      <button class="quick-barcode" onclick="quickSearch('8801037000000')">두유</button>
+      <button class="quick-barcode" onclick="quickSearch('8801068184536')">보리차</button>
+      <button class="quick-barcode" onclick="quickSearch('8801046012323')">홍삼</button>
+      <button class="quick-barcode" onclick="quickSearch('8801062222250')">녹차</button>
+    </div>
+    <div id="barcodeResult">
+      <div id="barcodeStatus" class="api-status"></div>
+      <div id="barcodeProduct"></div>
+      <div id="barcodeRecycle"></div>
+    </div>
+    <div class="recycle-tips">
+      <h4 data-i18n="recycle_tips_title">분리수거 꿀팁</h4>
+      <ul>
+        <li data-i18n="tip_1">내용물을 깨끗이 비우고 물로 헹궈야 재활용이 가능해요</li>
+        <li data-i18n="tip_2">라벨과 뚜껑은 재질이 다르면 분리해서 버려야 해요</li>
+        <li data-i18n="tip_3">종이팩(우유곽)은 종이류가 아닌 '종이팩'으로 따로 배출해요</li>
+        <li data-i18n="tip_4">코팅된 종이컵은 일반쓰레기예요</li>
+        <li data-i18n="tip_5">스티로폼은 부피를 최대한 줄여서 배출하세요</li>
+        <li data-i18n="tip_6">비닐은 깨끗이 씻어 말린 뒤 묶어서 버리세요</li>
+      </ul>
+    </div>
+    <div class="section-title" data-i18n="recycle_recent_title">최근 검색</div>
+    <div class="recent-list" id="recentList"></div>
+  </div>
+
+  <!-- ==================== 음식점 메뉴 ==================== -->
+  <div class="tab-page" id="tab-restaurant">
+    <div class="header">
+      <h1 data-i18n="rest_title">음식점 메뉴</h1>
+      <div class="sub" data-i18n="rest_subtitle">식약처 K-FIND 데이터베이스에서 영양 정보를 검색하세요</div>
+    </div>
+    <input type="hidden" id="foodApiUrl" value="https://script.google.com/macros/s/AKfycbyZyz-5EDBTeAXDb4V_8RyH4aWaneCDuIaJQc6EcmiJ4PtQM8nPMn6lh1Zx4Lwuar3-AQ/exec">
+    <div style="display:flex;gap:6px;margin-bottom:8px">
+      <input type="text" id="geminiKey2" style="flex:1;padding:8px 10px;border:1px solid #ddd;border-radius:8px;font-size:11px;background:var(--card)" placeholder="Gemini API 키 (다국어 번역용)" data-i18n-ph="ph_gemini2">
+    </div>
+    <div class="barcode-input-group">
+      <input type="text" id="foodSearch" data-i18n-ph="rest_placeholder" placeholder="음식 이름을 입력하세요" onkeydown="if(event.key==='Enter')searchFood()">
+      <button onclick="searchFood()" data-i18n="rest_search_btn">검색</button>
+    </div>
+    <div class="quick-barcodes quick-foods-default">
+      <span style="font-size:13px;color:var(--text-light);padding:5px 0;" data-i18n="rest_popular">인기 메뉴:</span>
+      <button class="quick-barcode" onclick="quickFoodSearch('된장찌개')">된장찌개</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('비빔밥')">비빔밥</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('김밥')">김밥</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('치킨')">치킨</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('삼겹살')">삼겹살</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('떡볶이')">떡볶이</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('짜장면')">짜장면</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('샐러드')">샐러드</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('순두부찌개')">순두부찌개</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('닭갈비')">닭갈비</button>
+    </div>
+    <div class="quick-barcodes quick-foods-elder">
+      <span style="font-size:13px;color:var(--text-light);padding:5px 0;" data-i18n="rest_popular">인기 메뉴:</span>
+      <button class="quick-barcode" onclick="quickFoodSearch('소고기')">소고기</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('돼지고기')">돼지고기</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('닭고기')">닭고기</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('고등어')">고등어</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('두부')">두부</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('시금치')">시금치</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('당근')">당근</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('떡')">떡</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('사과')">사과</button>
+      <button class="quick-barcode" onclick="quickFoodSearch('감자')">감자</button>
+    </div>
+    <div class="api-status" id="foodResultStatus"></div>
+    <div id="foodMealList"></div>
+    <div class="section-title" data-i18n="meal_nutrition">영양 섭취 현황</div>
+    <div class="nutrition-panel">
+      <div class="total-kcal" id="restTotalKcal">0</div>
+      <div class="kcal-label" data-i18n="kcal_label_text">총 섭취 칼로리</div>
+      <div id="restNutrientBars"></div>
+    </div>
+    <div class="section-title" data-i18n="meal_summary">한눈에 보기</div>
+    <div class="summary-cards" style="grid-template-columns:1fr 1fr 1fr">
+      <div class="summary-card"><div class="value" id="restCardKcal" style="color:#4CAF50;">0</div><div class="label" data-i18n="meal_kcal_label">kcal 섭취</div></div>
+      <div class="summary-card"><div class="value" id="restCardPercent" style="color:#FF9800;">0%</div><div class="label" data-i18n="meal_percent_label">1일 권장 대비</div></div>
+      <div class="summary-card"><div class="value" id="restCardGuide" style="color:#4FC3F7;font-size:15px">-</div><div class="label" data-i18n="meal_guide_label">밥양 가이드</div></div>
+      <div class="summary-card"><div class="value" id="restCardBalance" style="color:#F06292;font-size:15px">-</div><div class="label" data-i18n="meal_balance_label">영양 균형</div></div>
+      <div class="summary-card"><div class="value" id="restNutrium" style="color:#9C27B0;font-size:15px">0 mg</div><div class="label">나트륨</div></div>
+    </div>
+    <button class="reset-btn" onclick="resetRestAll()" data-i18n="btn_reset">전체 선택 해제하기</button>
+    <div class="recycle-tips" style="margin-top:12px">
+      <h4 data-i18n="rest_info_title">식약처 K-FIND 영양DB</h4>
+      <ul>
+        <li data-i18n="rest_info_1">검색 결과를 클릭해 선택하면, 여러 음식을 합쳐서 영양 분석을 할 수 있어요</li>
+        <li data-i18n="rest_info_2">식약처 국가 공식 영양성분 데이터로, 매월 업데이트되는 신뢰할 수 있는 정보예요</li>
+        <li data-i18n="rest_info_3">음식명, 유의어(방언)로도 검색할 수 있어요</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ==================== 키오스크 가이드 ==================== -->
+  <div class="tab-page" id="tab-kiosk">
+    <div class="header">
+      <h1 data-i18n="kiosk_title">키오스크 주문 가이드</h1>
+      <div class="sub" data-i18n="kiosk_subtitle">키오스크 화면을 찍어서 올리면 AI가 주문 방법을 알려드려요</div>
+    </div>
+
+    <div class="kiosk-api-setup">
+      <label for="geminiKey" style="font-size:13px;color:var(--text-light);font-weight:600;">Gemini API 키 (선택)</label>
+      <input type="text" id="geminiKey" data-i18n-ph="kiosk_api_ph" placeholder="Gemini API 키를 입력하면 AI 분석이 가능해요">
+      <button class="btn-save" onclick="saveGeminiKey()" style="width:100%;padding:8px;border-radius:10px;border:none;font-size:13px;cursor:pointer;" data-i18n="btn_save">설정 저장</button>
+    </div>
+
+    <div class="kiosk-upload" id="kioskUpload" onclick="document.getElementById('kioskFile').click()"
+         ondragover="event.preventDefault();this.style.borderColor='var(--purple)'"
+         ondragleave="this.style.borderColor='#ccc'" ondrop="event.preventDefault();this.style.borderColor='#ccc';handleKioskDrop(event)">
+      <div class="upload-icon">📸</div>
+      <div class="upload-text" data-i18n="kiosk_upload_text">여기를 눌러 키오스크 사진을 올려주세요</div>
+      <div class="upload-hint" data-i18n="kiosk_upload_hint">또는 사진을 여기로 드래그하세요</div>
+      <input type="file" id="kioskFile" accept="image/*" onchange="handleKioskUpload(event)">
+    </div>
+
+    <div class="kiosk-preview" id="kioskPreview" style="display:none">
+      <img id="kioskPreviewImg" src="" alt="">
+      <button class="remove-btn" onclick="removeKioskImage()">✕</button>
+    </div>
+
+    <div class="btn-row" id="kioskAnalyzeBtn" style="display:none;margin-bottom:12px">
+      <button class="btn-fetch" onclick="analyzeKiosk()" data-i18n="kiosk_analyze">AI 분석하기</button>
+    </div>
+
+    <div class="api-status" id="kioskStatus"></div>
+    <div class="section-title" data-i18n="kiosk_guide_title" id="kioskGuideTitle" style="display:none">주문 가이드</div>
+    <div id="kioskGuide"></div>
+
+    <div class="recycle-tips" style="margin-top:16px">
+      <h4 data-i18n="kiosk_basic_title">기본 키오스크 사용법</h4>
+      <ul>
+        <li data-i18n="kiosk_basic_1">화면 하단의 '주문하기' 버튼을 먼저 눌러주세요</li>
+        <li data-i18n="kiosk_basic_2">원하는 메뉴 사진을 손가락으로 터치하세요</li>
+        <li data-i18n="kiosk_basic_3">세트/단품 중 선택하고 수량을 정하세요</li>
+        <li data-i18n="kiosk_basic_4">매장식사/포장 중 선택하세요</li>
+        <li data-i18n="kiosk_basic_5">결제 버튼을 누르고 카드나 현금을 넣으세요</li>
+        <li data-i18n="kiosk_basic_6">영수증과 주문번호를 꼭 챙기세요</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- ==================== 안전 신고 ==================== -->
+  <div class="tab-page" id="tab-report">
+    <div class="header">
+      <h1 data-i18n="report_title">안전 신고</h1>
+      <div class="sub" data-i18n="report_subtitle">위험한 장소나 장애물을 사진과 함께 신고해주세요</div>
+    </div>
+
+    <div class="report-form" id="reportForm">
+      <div class="report-img-upload" onclick="document.getElementById('reportFile').click()">
+        <div>📷</div>
+        <div style="font-size:14px;font-weight:600" data-i18n="report_img_btn">사진 찍기 / 업로드</div>
+        <div id="reportImgPreview" style="margin-top:8px"></div>
+        <input type="file" id="reportFile" accept="image/*" onchange="handleReportImage(event)">
+      </div>
+
+      <select id="reportType">
+        <option value="" data-i18n="report_type_label">신고 유형 선택</option>
+        <option value="보도블록" data-i18n="report_type_1">보도블록 파손</option>
+        <option value="가로등" data-i18n="report_type_2">가로등 고장</option>
+        <option value="횡단보도" data-i18n="report_type_3">횡단보도 문제</option>
+        <option value="장애물" data-i18n="report_type_4">통행 장애물</option>
+        <option value="기타" data-i18n="report_type_5">기타 위험</option>
+      </select>
+
+      <div class="loc-row">
+        <input type="text" id="reportLoc" data-i18n-ph="report_loc_ph" placeholder="위치를 입력하세요 (예: 서울시 강남구)">
+        <button onclick="getReportLocation()" data-i18n="report_loc_btn">📍 현재 위치</button>
+      </div>
+
+      <textarea id="reportDesc" data-i18n-ph="report_desc_ph" placeholder="어떤 상황인지 설명해주세요"></textarea>
+
+      <button class="btn-fetch" onclick="submitReport()" style="width:100%;padding:12px;border-radius:12px;border:none;font-size:15px;cursor:pointer" data-i18n="report_submit">신고하기</button>
+      <div class="api-status" id="reportStatus"></div>
+    </div>
+  </div>
+
+  <!-- ==================== 안전 게시판 ==================== -->
+  <div class="tab-page" id="tab-board">
+    <div class="header">
+      <h1 data-i18n="board_title">안전 게시판</h1>
+      <div class="sub" data-i18n="board_subtitle">주민들이 공유한 안전 정보를 확인하세요</div>
+    </div>
+    <div class="section-title" data-i18n="report_list_title">신고 목록</div>
+    <div id="reportList"></div>
+  </div>
+
+  <div class="footer" data-i18n="footer_text">오늘도 건강한 한 끼! · 분리수거로 지구도 건강하게</div>
+</div>
+
+<button class="voice-fab" id="voiceFab" onclick="toggleVoice()" title="음성으로 입력">🎤</button>
+
+<script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js" crossorigin="anonymous"></script>
+<script>
+// ── 번역 ──
+const T = {
+  ko: {
+    tab_meal:'🍽️ 급식 분석',tab_recycle:'♻️ 분리수거 안내',tab_restaurant:'🍜 음식점 메뉴',
+    btn_normal:'기본',btn_elder:'노약자 모드',btn_student:'학생 모드',btn_save:'설정 저장',btn_fetch:'급식 불러오기',btn_reset:'전체 선택 해제하기',
+    label_api_key:'API 인증키 (공공데이터포털)',label_office:'교육청 코드',label_school:'학교 코드',label_proxy:'CORS 프록시 URL (선택)',
+    ph_api_key:'인증키를 입력하세요',ph_school:'예: 7010083',ph_proxy:'CORS 우회 프록시 주소',ph_appsscript:'Apps Script URL',ph_gemini2:'Gemini API 키 (다국어 번역용)',
+    meal_title:'오늘의 급식',meal_subtitle:'영양 분석 · 섭취 가이드',meal_menu:'점심 메뉴',meal_nutrition:'영양 섭취 현황',meal_summary:'한눈에 보기',
+    meal_kcal_label:'kcal 섭취',meal_percent_label:'1일 권장 대비',meal_guide_label:'밥양 가이드',meal_balance_label:'영양 균형',kcal_label_text:'총 섭취 칼로리',
+    nutrient_carb:'탄수화물',nutrient_protein:'단백질',nutrient_fat:'지방',
+    guide_rice:'밥숟가락 3~4번 정도',guide_soup:'국자로 1그릇',guide_kimchi:'젓가락 2~3번 정도',guide_meat:'젓가락 5~6번 정도',guide_namul:'젓가락 3~4번 정도',
+    guide_milk:'1개 다 드세요',guide_fruit:'반 개 정도',guide_bread:'1~2조각',guide_fried:'1~2개 정도',guide_default:'적당히 드세요',
+    spoon_more:'밥을 더 드세요',spoon_ok:'밥 양이 적당해요',spoon_enough:'든든하게 드셨어요',spoon_full:'충분히 드셨어요',spoon_with_rice:'밥을 함께 드세요',
+    balance_more:'더 드셔야 해요',balance_high_prot:'단백질이 많아요',balance_high_carb:'탄수화물이 많아요',balance_good:'균형이 좋아요',
+    status_loading_meal:'급식 정보를 불러오는 중...',status_loading_prod:'상품 정보를 불러오는 중...',
+    status_saved:'API 설정이 저장되었어요',status_err_key:'API 인증키를 입력해주세요',status_err_school:'교육청 코드와 학교 코드를 입력해주세요',
+    status_err_cors:'CORS 오류가 발생했어요. 프록시 URL을 입력해보세요',status_err_parse:'메뉴 정보를 파싱할 수 없어요',
+    status_err_nodata:'오늘의 급식 정보가 없어요 (주말/방학일 수 있어요)',status_err_fetch:'불러오기 실패: ',
+    status_err_notfound:'상품 정보를 찾을 수 없어요',    status_success_meal_a:'개 메뉴를 불러왔어요 (총 ',status_success_meal_b:' kcal)',
+    status_success_prod:' 정보를 찾았어요',
+    recycle_title:'분리수거 안내',recycle_subtitle:'바코드로 상품의 분리수거 방법을 확인하세요',recycle_placeholder:'바코드 13자리 숫자를 입력하세요',
+    recycle_search_btn:'검색',recycle_quick_search:'빠른 검색:',recycle_recent_title:'최근 검색',recycle_tips_title:'분리수거 꿀팁',
+    tip_1:'내용물을 깨끗이 비우고 물로 헹궈야 재활용이 가능해요',tip_2:'라벨과 뚜껑은 재질이 다르면 분리해서 버려야 해요',
+    tip_3:"종이팩(우유곽)은 종이류가 아닌 '종이팩'으로 따로 배출해요",tip_4:'코팅된 종이컵은 일반쓰레기예요',
+    tip_5:'스티로폼은 부피를 최대한 줄여서 배출하세요',tip_6:'비닐은 깨끗이 씻어 말린 뒤 묶어서 버리세요',
+    label_packaging:'포장재 정보: ',label_category:'카테고리: ',label_barcode:'바코드: ',
+    bin_plastic:'플라스틱류',bin_vinyl:'비닐류',bin_paper:'종이류',bin_paper_pack:'종이팩',bin_glass:'유리병',bin_can:'캔/고철류',bin_general:'일반쓰레기',
+    method_pet:'투명 페트병',method_hdpe:'고밀도 폴리에틸렌',method_pvc:'PVC',method_ldpe:'저밀도 폴리에틸렌',
+    method_pp:'폴리프로필렌',method_ps:'폴리스티렌',method_paper:'종이 포장재',method_paper_pack:'종이팩',
+    method_glass:'유리병',method_metal:'금속 캔',method_general:'복합재질 / 분리불가',
+    detail_pet:'라벨 제거, 내용물 비우기, 찌그러뜨리기',detail_hdpe:'내용물 비우고 물로 헹구기',detail_pvc:'내용물 비우기, 가급적 일반쓰레기로',
+    detail_ldpe:'이물질 제거 후 비닐로 묶어 배출',detail_pp:'내용물 비우고 물로 헹구기',detail_ps:'내용물 비우기, 스티로폼은 부피 줄이기',
+    detail_paper:'물기 없이, 박스는 테이프 제거 후 접기',detail_paper_pack:'내용물 비우고 헹군 후 펼쳐서 말리기',
+    detail_glass:'내용물 비우기, 뚜껑은 분리 배출',detail_metal:'내용물 비우고 가능하면 압축',detail_general:'여러 재질이 섞여 분리가 어려우면 일반쓰레기로',
+    footer_text:'오늘도 건강한 한 끼! · 분리수거로 지구도 건강하게',
+    day_sun:'일',day_mon:'월',day_tue:'화',day_wed:'수',day_thu:'목',day_fri:'금',day_sat:'토',
+    year:'년',month:'월',day:'일',
+    rest_title:'음식점 메뉴',rest_subtitle:'식약처 K-FIND 데이터베이스에서 영양 정보를 검색하세요',
+    rest_placeholder:'음식 이름을 입력하세요',rest_search_btn:'검색',rest_popular:'인기 메뉴:',rest_no_result:'검색 결과가 없어요',
+    rest_info_title:'식약처 K-FIND 영양DB',
+    rest_info_1:'검색 결과를 클릭해 선택하면, 여러 음식을 합쳐서 영양 분석을 할 수 있어요',
+    rest_info_2:'국가 공식 영양성분 데이터로, 매월 업데이트되는 신뢰할 수 있는 정보예요',
+    rest_info_3:'음식명, 유의어(방언), 다국어로도 검색할 수 있어요 (Gemini API 키 필요)',
+    rest_info_4:'검색 결과에서 원하는 식품을 선택해 상세 영양성분을 확인할 수 있어요',
+    tt_title:'오늘의 시간표',tt_lunch:'점심시간',tt_edit:'수정',tt_save:'저장',tt_cancel:'취소',
+    tt_mon:'월',tt_tue:'화',tt_wed:'수',tt_thu:'목',tt_fri:'금',
+    tab_kiosk:'📱 키오스크',
+    kiosk_title:'키오스크 주문 가이드',kiosk_subtitle:'키오스크 화면을 찍어서 올리면 AI가 주문 방법을 알려드려요',
+    kiosk_api_ph:'Gemini API 키를 입력하면 AI 분석이 가능해요',
+    kiosk_upload_text:'여기를 눌러 키오스크 사진을 올려주세요',kiosk_upload_hint:'또는 사진을 여기로 드래그하세요',
+    kiosk_analyze:'AI 분석하기',kiosk_guide_title:'주문 가이드',kiosk_basic_title:'기본 키오스크 사용법',
+    kiosk_basic_1:'화면 하단의 \'주문하기\' 버튼을 먼저 눌러주세요',kiosk_basic_2:'원하는 메뉴 사진을 손가락으로 터치하세요',
+    kiosk_basic_3:'세트/단품 중 선택하고 수량을 정하세요',kiosk_basic_4:'매장식사/포장 중 선택하세요',
+    kiosk_basic_5:'결제 버튼을 누르고 카드나 현금을 넣으세요',kiosk_basic_6:'영수증과 주문번호를 꼭 챙기세요',
+    kiosk_status_loading:'AI가 분석 중입니다...',kiosk_status_nokey:'Gemini API 키를 입력해주세요',
+    kiosk_status_noimg:'사진을 먼저 업로드해주세요',kiosk_status_err:'분석 중 오류 발생: ',
+    tab_report:'✏️ 안전 신고',tab_board:'🛡️ 게시판',
+    report_title:'안전 신고',report_subtitle:'위험한 장소나 장애물을 사진과 함께 신고해주세요',
+    report_img_btn:'사진 찍기 / 업로드',report_type_label:'신고 유형 선택',
+    report_type_1:'보도블록 파손',report_type_2:'가로등 고장',report_type_3:'횡단보도 문제',
+    report_type_4:'통행 장애물',report_type_5:'기타 위험',
+    report_loc_ph:'위치를 입력하세요 (예: 서울시 강남구)',report_loc_btn:'📍 현재 위치',
+    report_desc_ph:'어떤 상황인지 설명해주세요',report_submit:'신고하기',
+    report_list_title:'신고 목록',report_status_new:'접수됨',report_status_check:'확인중',report_status_done:'조치완료',
+    report_delete:'삭제',report_empty:'아직 게시글이 없어요',report_success:'게시글이 등록되었어요',
+    report_need_type:'신고 유형을 선택해주세요',report_need_loc:'위치를 입력해주세요',
+    report_need_desc:'설명을 입력해주세요',report_need_img:'사진을 업로드해주세요',
+    report_loc_get:'위치 정보를 가져왔어요',report_loc_fail:'위치 정보를 가져올 수 없어요',
+    report_date_format:'{y}년 {m}월 {d}일 {h}:{min}',
+    report_comment_ph:'댓글을 입력하세요',report_comment_btn:'등록',report_comments:'댓글',
+    board_title:'안전 게시판',board_subtitle:'주민들이 공유한 안전 정보를 확인하세요',
+  },
+  en: {
+    tab_meal:'🍽️ Meal Analysis',tab_recycle:'♻️ Recycling Guide',tab_restaurant:'🍜 Restaurant Menu',
+    btn_normal:'Normal',btn_elder:'Senior',btn_student:'Student',btn_save:'Save',btn_fetch:'Fetch Meal',btn_reset:'Deselect All',
+    label_api_key:'API Key (data.go.kr)',label_office:'Office Code',label_school:'School Code',label_proxy:'CORS Proxy URL (optional)',
+    ph_api_key:'Enter your API key',ph_school:'e.g., 7010083',ph_proxy:'CORS proxy URL',ph_appsscript:'Apps Script URL',ph_gemini2:'Gemini API key (for translation)',
+    meal_title:"Today's Meal",meal_subtitle:'Nutrition Analysis & Guide',meal_menu:'Lunch Menu',meal_nutrition:'Nutrition Intake',meal_summary:'Overview',
+    meal_kcal_label:'kcal Intake',meal_percent_label:'% of Daily Goal',meal_guide_label:'Rice Guide',meal_balance_label:'Nutrition Balance',kcal_label_text:'Total Calories',
+    nutrient_carb:'Carbs',nutrient_protein:'Protein',nutrient_fat:'Fat',
+    guide_rice:'3~4 spoonfuls of rice',guide_soup:'1 bowl of soup',guide_kimchi:'2~3 bites of kimchi',guide_meat:'5~6 bites of meat',guide_namul:'3~4 bites of veggies',
+    guide_milk:'Finish the whole thing',guide_fruit:'About half',guide_bread:'1~2 slices',guide_fried:'1~2 pieces',guide_default:'Eat moderately',
+    spoon_more:'Need more rice',spoon_ok:'Rice amount is okay',spoon_enough:'You ate well',spoon_full:'Plenty of rice',spoon_with_rice:'Eat rice together',
+    balance_more:'Need to eat more',balance_high_prot:'High in protein',balance_high_carb:'High in carbs',balance_good:'Well balanced',
+    status_loading_meal:'Loading meal data...',status_loading_prod:'Loading product info...',
+    status_saved:'Settings saved',status_err_key:'Please enter your API key',status_err_school:'Please enter office/school code',
+    status_err_cors:'CORS error. Try using a proxy URL.',status_err_parse:'Could not parse menu',status_err_nodata:'No meal data (weekend/holiday?)',
+    status_err_fetch:'Fetch failed: ',status_err_notfound:'Product not found',    status_success_meal_a:' items loaded (',status_success_meal_b:' kcal total)',status_success_prod:' info loaded',
+    recycle_title:'Recycling Guide',recycle_subtitle:'Check recycling method by barcode',recycle_placeholder:'Enter 13-digit barcode',
+    recycle_search_btn:'Search',recycle_quick_search:'Quick:',recycle_recent_title:'Recent',recycle_tips_title:'Recycling Tips',
+    tip_1:'Empty contents and rinse with water',
+    tip_2:'Separate labels and caps if different materials',tip_3:'Cartons go into "carton" bin, not paper',
+    tip_4:'Coated paper cups are general waste',tip_5:'Reduce styrofoam volume before disposal',tip_6:'Wash, dry and bundle plastic bags',
+    label_packaging:'Packaging: ',label_category:'Category: ',label_barcode:'Barcode: ',
+    bin_plastic:'Plastic',bin_vinyl:'Vinyl',bin_paper:'Paper',bin_paper_pack:'Carton',bin_glass:'Glass',bin_can:'Can/Metal',bin_general:'General Waste',
+    method_pet:'Clear PET Bottle',method_hdpe:'HDPE',method_pvc:'PVC',method_ldpe:'LDPE',
+    method_pp:'Polypropylene',method_ps:'Polystyrene',method_paper:'Paper Packaging',method_paper_pack:'Carton',
+    method_glass:'Glass Bottle',method_metal:'Metal Can',method_general:'Mixed / Not Recyclable',
+    detail_pet:'Remove label, empty, crush',detail_hdpe:'Empty and rinse',detail_pvc:'Empty; prefer general waste',
+    detail_ldpe:'Clean, bundle with other vinyl',detail_pp:'Empty and rinse',detail_ps:'Empty, reduce volume for styrofoam',
+    detail_paper:'Keep dry, remove tape and fold boxes',detail_paper_pack:'Empty, rinse, flatten and dry',
+    detail_glass:'Empty, separate cap',detail_metal:'Empty, crush if possible',detail_general:'Mixed materials → general waste',
+    footer_text:'Healthy meals & clean Earth!',
+    day_sun:'Sun',day_mon:'Mon',day_tue:'Tue',day_wed:'Wed',day_thu:'Thu',day_fri:'Fri',day_sat:'Sat',
+    year:'',month:'/',day:'',
+    rest_title:'Restaurant Menu',rest_subtitle:'Search food to check nutrition info',
+    rest_placeholder:'Enter food name',rest_search_btn:'Search',rest_popular:'Popular:',rest_no_result:'No results found',
+    tt_title:"Today's Timetable",tt_lunch:'Lunch Break',tt_edit:'Edit',tt_save:'Save',tt_cancel:'Cancel',
+    tt_mon:'Mon',tt_tue:'Tue',tt_wed:'Wed',tt_thu:'Thu',tt_fri:'Fri',
+    tab_kiosk:'📱 Kiosk',
+    kiosk_title:'Kiosk Order Guide',kiosk_subtitle:'Upload a kiosk photo and AI will guide you step by step',
+    kiosk_api_ph:'Enter Gemini API key for AI analysis',
+    kiosk_upload_text:'Click here to upload kiosk photo',kiosk_upload_hint:'or drag & drop your photo here',
+    kiosk_analyze:'Analyze with AI',kiosk_guide_title:'Order Guide',kiosk_basic_title:'Basic Kiosk Usage',
+    kiosk_basic_1:'First, press the "Order" button at the bottom',kiosk_basic_2:'Touch the menu item you want',
+    kiosk_basic_3:'Choose set or single, then select quantity',kiosk_basic_4:'Choose dine-in or take-out',
+    kiosk_basic_5:'Press payment and insert card or cash',kiosk_basic_6:"Don't forget your receipt and order number",
+    kiosk_status_loading:'AI is analyzing...',kiosk_status_nokey:'Please enter Gemini API key',
+    kiosk_status_noimg:'Please upload a photo first',kiosk_status_err:'Analysis error: ',
+    tab_report:'✏️ Report',tab_board:'🛡️ Board',
+    report_title:'Safety Report',report_subtitle:'Report hazards or obstacles with a photo',
+    report_img_btn:'Take Photo / Upload',report_type_label:'Report Type',
+    report_type_1:'Damaged sidewalk',report_type_2:'Broken streetlight',report_type_3:'Crosswalk issue',
+    report_type_4:'Obstacle',report_type_5:'Other hazard',
+    report_loc_ph:'Enter location (e.g., Gangnam, Seoul)',report_loc_btn:'📍 My Location',
+    report_desc_ph:'Describe the situation',report_submit:'Submit Report',
+    report_list_title:'Reports',report_status_new:'Received',report_status_check:'Checking',report_status_done:'Resolved',
+    report_delete:'Delete',report_empty:'No posts yet',report_success:'Post published',
+    report_need_type:'Please select a type',report_need_loc:'Please enter a location',
+    report_need_desc:'Please enter a description',report_need_img:'Please upload a photo',
+    report_loc_get:'Location retrieved',report_loc_fail:'Could not get location',
+    report_date_format:'{m}/{d} {h}:{min}',
+    report_comment_ph:'Write a comment',report_comment_btn:'Post',report_comments:'Comments',
+    board_title:'Safety Board',board_subtitle:'Check safety info shared by neighbors',
+  },
+  'zh-CN': {
+    tab_meal:'🍽️ 餐食分析',tab_recycle:'♻️ 分类回收指南',tab_restaurant:'🍜 餐厅菜单',
+    btn_normal:'标准',btn_elder:'老年模式',btn_student:'学生模式',btn_save:'保存',btn_fetch:'加载餐食',btn_reset:'取消全选',
+    label_api_key:'API密钥',label_office:'教育厅代码',label_school:'学校代码',label_proxy:'CORS代理(可选)',
+    ph_api_key:'请输入API密钥',ph_school:'例如: 7010083',ph_proxy:'CORS代理地址',ph_appsscript:'Apps Script 地址',ph_gemini2:'Gemini API 密钥（多语言翻译）',
+    meal_title:'今日餐食',meal_subtitle:'营养分析 · 摄入指南',meal_menu:'午餐菜单',meal_nutrition:'营养摄入',meal_summary:'概览',
+    meal_kcal_label:'摄入千卡',meal_percent_label:'每日推荐百分比',meal_guide_label:'米饭指南',meal_balance_label:'营养均衡',kcal_label_text:'总摄入热量',
+    nutrient_carb:'碳水化合物',nutrient_protein:'蛋白质',nutrient_fat:'脂肪',
+    guide_rice:'米饭3~4勺',guide_soup:'汤1碗',guide_kimchi:'泡菜2~3口',guide_meat:'肉5~6口',guide_namul:'蔬菜3~4口',
+    guide_milk:'喝完1个',guide_fruit:'半个左右',guide_bread:'1~2片',guide_fried:'1~2个',guide_default:'适量食用',
+    spoon_more:'再多吃点米饭',spoon_ok:'米饭量合适',spoon_enough:'吃得很好',spoon_full:'米饭足够了',spoon_with_rice:'请搭配米饭',
+    balance_more:'需要多吃',balance_high_prot:'蛋白质偏多',balance_high_carb:'碳水化合物偏多',balance_good:'营养均衡',
+    status_loading_meal:'加载餐食中...',status_loading_prod:'加载商品信息中...',
+    status_saved:'设置已保存',status_err_key:'请输入API密钥',status_err_school:'请输入教育厅/学校代码',
+    status_err_cors:'CORS错误，请使用代理',status_err_parse:'无法解析菜单',status_err_nodata:'暂无餐食数据(周末/假期)',
+    status_err_fetch:'加载失败: ',status_err_notfound:'未找到商品',    status_success_meal_a:' 道菜品 (共 ',status_success_meal_b:' kcal)',status_success_prod:' 已加载',
+    recycle_title:'分类回收指南',recycle_subtitle:'扫描条码查询回收方法',recycle_placeholder:'输入13位条码',
+    recycle_search_btn:'搜索',recycle_quick_search:'快速:',recycle_recent_title:'最近',recycle_tips_title:'回收小贴士',
+    tip_1:'清空内容物并用水冲洗',tip_2:'标签和盖子材质不同要分开丢弃',
+    tip_3:'牛奶盒放入"纸盒"分类,不是纸类',tip_4:'带涂层纸杯属于一般垃圾',
+    tip_5:'泡沫塑料尽量压缩体积',tip_6:'塑料袋清洗晾干后捆扎丢弃',
+    label_packaging:'包装: ',label_category:'分类: ',label_barcode:'条码: ',
+    bin_plastic:'塑料类',bin_vinyl:'塑料薄膜',bin_paper:'纸类',bin_paper_pack:'纸盒',bin_glass:'玻璃瓶',bin_can:'罐/金属',bin_general:'一般垃圾',
+    method_pet:'透明PET瓶',method_hdpe:'高密度聚乙烯',method_pvc:'PVC',method_ldpe:'低密度聚乙烯',
+    method_pp:'聚丙烯',method_ps:'聚苯乙烯',method_paper:'纸包装',method_paper_pack:'纸盒',
+    method_glass:'玻璃瓶',method_metal:'金属罐',method_general:'复合材料/不可回收',
+    detail_pet:'撕掉标签，清空，压扁',detail_hdpe:'清空并冲洗',detail_pvc:'清空;优先一般垃圾',
+    detail_ldpe:'清洁后与其他塑料袋捆扎',detail_pp:'清空并冲洗',detail_ps:'清空，泡沫塑料要压缩',
+    detail_paper:'保持干燥，撕掉胶带并折叠',detail_paper_pack:'清空、冲洗、展开晾干',
+    detail_glass:'清空，瓶盖分开丢弃',detail_metal:'清空，尽量压扁',detail_general:'复合材料 → 一般垃圾',
+    footer_text:'健康饮食，清洁地球！',
+    day_sun:'日',day_mon:'一',day_tue:'二',day_wed:'三',day_thu:'四',day_fri:'五',day_sat:'六',
+    year:'年',month:'月',day:'日',
+    rest_title:'餐厅菜单',rest_subtitle:'搜索食物查看营养信息',
+    rest_placeholder:'输入食物名称',rest_search_btn:'搜索',rest_popular:'热门:',rest_no_result:'未找到结果',
+    tt_title:'今日课程表',tt_lunch:'午餐时间',tt_edit:'编辑',tt_save:'保存',tt_cancel:'取消',
+    tt_mon:'周一',tt_tue:'周二',tt_wed:'周三',tt_thu:'周四',tt_fri:'周五',
+    tab_kiosk:'📱 自助点餐',
+    kiosk_title:'自助点餐指南',kiosk_subtitle:'上传自助点餐机照片，AI会逐步指导您点餐',
+    kiosk_api_ph:'输入Gemini API密钥进行AI分析',
+    kiosk_upload_text:'点击此处上传自助点餐机照片',kiosk_upload_hint:'或将照片拖放到此处',
+    kiosk_analyze:'AI分析',kiosk_guide_title:'点餐指南',kiosk_basic_title:'基本使用方法',
+    kiosk_basic_1:'先按屏幕下方的"点餐"按钮',kiosk_basic_2:'用手指触摸想要的菜品图片',
+    kiosk_basic_3:'选择套餐或单品，然后选择数量',kiosk_basic_4:'选择堂食或外带',
+    kiosk_basic_5:'按结算按钮，插入银行卡或现金',kiosk_basic_6:'别忘了拿小票和取餐号',
+    kiosk_status_loading:'AI正在分析...',kiosk_status_nokey:'请输入Gemini API密钥',
+    kiosk_status_noimg:'请先上传照片',kiosk_status_err:'分析错误: ',
+    tab_report:'✏️ 举报',tab_board:'🛡️ 论坛',
+    report_title:'安全举报',report_subtitle:'请拍照举报危险地点或障碍物',
+    report_img_btn:'拍照 / 上传',report_type_label:'举报类型',
+    report_type_1:'人行道损坏',report_type_2:'路灯故障',report_type_3:'人行横道问题',
+    report_type_4:'通行障碍',report_type_5:'其他危险',
+    report_loc_ph:'输入位置 (例: 首尔江南区)',report_loc_btn:'📍 我的位置',
+    report_desc_ph:'描述情况',report_submit:'提交举报',
+    report_list_title:'举报列表',report_status_new:'已受理',report_status_check:'处理中',report_status_done:'已解决',
+    report_delete:'删除',report_empty:'暂无举报',report_success:'举报已提交',
+    report_need_type:'请选择举报类型',report_need_loc:'请输入位置',
+    report_need_desc:'请输入描述',report_need_img:'请上传照片',
+    report_loc_get:'已获取位置',report_loc_fail:'无法获取位置',
+    report_date_format:'{m}月{d}日 {h}:{min}',report_comment_ph:'写评论',report_comment_btn:'发布',report_comments:'评论',
+    board_title:'安全论坛',board_subtitle:'查看邻居分享的安全信息',
+  },
+  vi: {
+    tab_meal:'🍽️ Phân Tích Bữa Ăn',tab_recycle:'♻️ Hướng Dẫn Tái Chế',tab_restaurant:'🍜 Nhà Hàng',
+    btn_normal:'Thường',btn_elder:'Người Cao Tuổi',btn_student:'Học Sinh',btn_save:'Lưu',btn_fetch:'Tải Bữa Ăn',btn_reset:'Bỏ Chọn',
+    label_api_key:'Khóa API',label_office:'Mã Sở GD',label_school:'Mã Trường',label_proxy:'URL Proxy CORS (tùy chọn)',
+    ph_api_key:'Nhập khóa API',ph_school:'VD: 7010083',ph_proxy:'Địa chỉ proxy CORS',ph_appsscript:'URL Apps Script',ph_gemini2:'Khóa API Gemini (dịch đa ngôn ngữ)',
+    meal_title:'Bữa Ăn Hôm Nay',meal_subtitle:'Phân Tích Dinh Dưỡng',meal_menu:'Thực Đơn Trưa',meal_nutrition:'Dinh Dưỡng',meal_summary:'Tổng Quan',
+    meal_kcal_label:'kcal Đã Nạp',meal_percent_label:'% Khuyến Nghị',meal_guide_label:'Hướng Dẫn Cơm',meal_balance_label:'Cân Bằng',kcal_label_text:'Tổng Calo',
+    nutrient_carb:'Carb',nutrient_protein:'Đạm',nutrient_fat:'Béo',
+    guide_rice:'3~4 muỗng cơm',guide_soup:'1 bát canh',guide_kimchi:'2~3 miếng kimchi',guide_meat:'5~6 miếng thịt',guide_namul:'3~4 miếng rau',
+    guide_milk:'1 hộp',guide_fruit:'Nửa quả',guide_bread:'1~2 lát',guide_fried:'1~2 miếng',guide_default:'Ăn vừa phải',
+    spoon_more:'Cần thêm cơm',spoon_ok:'Lượng cơm vừa đủ',spoon_enough:'Ăn tốt',spoon_full:'Đủ cơm',spoon_with_rice:'Hãy ăn cùng cơm',
+    balance_more:'Cần ăn thêm',balance_high_prot:'Nhiều đạm',balance_high_carb:'Nhiều carb',balance_good:'Cân bằng tốt',
+    status_loading_meal:'Đang tải bữa ăn...',status_loading_prod:'Đang tải thông tin...',
+    status_saved:'Đã lưu',status_err_key:'Vui lòng nhập khóa API',status_err_school:'Vui lòng nhập mã trường',
+    status_err_cors:'Lỗi CORS. Thử dùng proxy.',status_err_parse:'Không đọc được thực đơn',
+    status_err_nodata:'Không có dữ liệu (cuối tuần/nghỉ?)',status_err_fetch:'Tải thất bại: ',
+    status_err_notfound:'Không tìm thấy sản phẩm',    status_success_meal_a:' món (',status_success_meal_b:' kcal)',status_success_prod:' đã tải',
+    recycle_title:'Hướng Dẫn Tái Chế',recycle_subtitle:'Kiểm tra cách tái chế bằng mã vạch',recycle_placeholder:'Nhập 13 số mã vạch',
+    recycle_search_btn:'Tìm',recycle_quick_search:'Nhanh:',recycle_recent_title:'Gần đây',recycle_tips_title:'Mẹo Tái Chế',
+    tip_1:'Đổ hết và rửa sạch bằng nước',tip_2:'Tách nhãn và nắp nếu khác chất liệu',
+    tip_3:'Hộp sữa bỏ vào thùng "hộp giấy", không phải giấy',tip_4:'Cốc giấy tráng phủ là rác thường',
+    tip_5:'Giảm thể tích xốp trước khi vứt',tip_6:'Rửa, phơi khô và buộc túi nilon',
+    label_packaging:'Bao bì: ',label_category:'Danh mục: ',label_barcode:'Mã vạch: ',
+    bin_plastic:'Nhựa',bin_vinyl:'Nilon',bin_paper:'Giấy',bin_paper_pack:'Hộp Giấy',bin_glass:'Thủy Tinh',bin_can:'Lon/Kim Loại',bin_general:'Rác Thường',
+    method_pet:'Chai PET Trong',method_hdpe:'HDPE',method_pvc:'PVC',method_ldpe:'LDPE',
+    method_pp:'Polypropylene',method_ps:'Polystyrene',method_paper:'Bao Bì Giấy',method_paper_pack:'Hộp Giấy',
+    method_glass:'Chai Thủy Tinh',method_metal:'Lon Kim Loại',method_general:'Hỗn Hợp / Không Tái Chế',
+    detail_pet:'Bỏ nhãn, rỗng, bóp dẹp',detail_hdpe:'Rỗng và rửa',detail_pvc:'Rỗng; nên bỏ rác thường',
+    detail_ldpe:'Sạch, buộc chung nilon',detail_pp:'Rỗng và rửa',detail_ps:'Rỗng, xốp thì nén nhỏ',
+    detail_paper:'Khô ráo, gỡ băng dính, gấp hộp',detail_paper_pack:'Rỗng, rửa, trải phẳng và phơi khô',
+    detail_glass:'Rỗng, tách nắp',detail_metal:'Rỗng, bóp dẹp nếu được',detail_general:'Vật liệu hỗn hợp → rác thường',
+    footer_text:'Bữa ăn lành mạnh, Trái đất sạch!',
+    day_sun:'CN',day_mon:'T2',day_tue:'T3',day_wed:'T4',day_thu:'T5',day_fri:'T6',day_sat:'T7',
+    year:'',month:'/',day:'',
+    rest_title:'Thực Đơn Nhà Hàng',rest_subtitle:'Tìm món để xem dinh dưỡng',
+    rest_placeholder:'Nhập tên món',rest_search_btn:'Tìm',rest_popular:'Phổ biến:',rest_no_result:'Không tìm thấy',
+    tt_title:'Thời Khóa Biểu',tt_lunch:'Giờ Ăn Trưa',tt_edit:'Sửa',tt_save:'Lưu',tt_cancel:'Hủy',
+    tt_mon:'T2',tt_tue:'T3',tt_wed:'T4',tt_thu:'T5',tt_fri:'T6',
+    tab_kiosk:'📱 Kiosk',
+    kiosk_title:'Hướng Dẫn Kiosk',kiosk_subtitle:'Chụp ảnh màn hình kiosk và AI sẽ hướng dẫn từng bước',
+    kiosk_api_ph:'Nhập khóa Gemini API để phân tích AI',
+    kiosk_upload_text:'Nhấn vào đây để tải ảnh kiosk lên',kiosk_upload_hint:'hoặc kéo thả ảnh vào đây',
+    kiosk_analyze:'Phân Tích AI',kiosk_guide_title:'Hướng Dẫn',kiosk_basic_title:'Cách Dùng Cơ Bản',
+    kiosk_basic_1:'Nhấn nút "Đặt món" ở dưới cùng',kiosk_basic_2:'Chạm vào món bạn muốn',
+    kiosk_basic_3:'Chọn combo hoặc món lẻ, chọn số lượng',kiosk_basic_4:'Chọn ăn tại chỗ hoặc mang đi',
+    kiosk_basic_5:'Nhấn thanh toán, đưa thẻ hoặc tiền mặt',kiosk_basic_6:'Đừng quên lấy hóa đơn và số thứ tự',
+    kiosk_status_loading:'AI đang phân tích...',kiosk_status_nokey:'Vui lòng nhập khóa Gemini API',
+    kiosk_status_noimg:'Vui lòng tải ảnh lên trước',kiosk_status_err:'Lỗi phân tích: ',
+    tab_report:'🛡️ Bảng Tin',
+    report_title:'Bảng Tin An Toàn',report_subtitle:'Chia sẻ nguy hiểm hoặc chướng ngại vật kèm ảnh',
+    report_img_btn:'Chụp Ảnh / Tải Lên',report_type_label:'Loại Báo Cáo',
+    report_type_1:'Vỉa hè hỏng',report_type_2:'Đèn đường hỏng',report_type_3:'Vạch qua đường',
+    report_type_4:'Vật cản',report_type_5:'Nguy hiểm khác',
+    report_loc_ph:'Nhập địa điểm (VD: Gangnam, Seoul)',report_loc_btn:'📍 Vị Trí Của Tôi',
+    report_desc_ph:'Mô tả tình huống',report_submit:'Gửi Báo Cáo',
+    report_list_title:'Danh Sách',report_status_new:'Đã Nhận',report_status_check:'Đang Kiểm Tra',report_status_done:'Đã Xử Lý',
+    report_delete:'Xóa',report_empty:'Chưa có báo cáo',report_success:'Đã gửi báo cáo',
+    report_need_type:'Vui lòng chọn loại',report_need_loc:'Vui lòng nhập địa điểm',
+    report_need_desc:'Vui lòng nhập mô tả',report_need_img:'Vui lòng tải ảnh',
+    report_loc_get:'Đã lấy vị trí',report_loc_fail:'Không lấy được vị trí',
+    report_date_format:'{d}/{m} {h}:{min}',
+  },
+  ja: {
+    tab_meal:'🍽️ 給食分析',tab_recycle:'♻️ 分別ガイド',tab_restaurant:'🍜 飲食店',
+    btn_normal:'標準',btn_elder:'シニア',btn_student:'学生',btn_save:'保存',btn_fetch:'給食を読み込む',btn_reset:'選択解除',
+    label_api_key:'APIキー',label_office:'教育庁コード',label_school:'学校コード',label_proxy:'CORSプロキシ(任意)',
+    ph_api_key:'APIキーを入力',ph_school:'例: 7010083',ph_proxy:'CORSプロキシURL',ph_appsscript:'Apps Script URL',ph_gemini2:'Gemini API キー（多言語翻訳）',
+    meal_title:'今日の給食',meal_subtitle:'栄養分析・摂取ガイド',meal_menu:'昼食メニュー',meal_nutrition:'栄養摂取状況',meal_summary:'概要',
+    meal_kcal_label:'摂取kcal',meal_percent_label:'1日の推奨比',meal_guide_label:'ご飯ガイド',meal_balance_label:'栄養バランス',kcal_label_text:'総摂取カロリー',
+    nutrient_carb:'炭水化物',nutrient_protein:'タンパク質',nutrient_fat:'脂質',
+    guide_rice:'ご飯3~4杯程度',guide_soup:'お椀1杯',guide_kimchi:'キムチ2~3口',guide_meat:'肉5~6口',guide_namul:'野菜3~4口',
+    guide_milk:'1本飲み切る',guide_fruit:'半分程度',guide_bread:'1~2枚',guide_fried:'1~2個',guide_default:'適量で',
+    spoon_more:'ご飯をもう少し',spoon_ok:'ご飯の量は適切',spoon_enough:'しっかり食べました',spoon_full:'ご飯は十分',spoon_with_rice:'ご飯と一緒に',
+    balance_more:'もっと食べましょう',balance_high_prot:'タンパク質多め',balance_high_carb:'炭水化物多め',balance_good:'バランス良好',
+    status_loading_meal:'給食データ読み込み中...',status_loading_prod:'商品情報読み込み中...',
+    status_saved:'設定を保存しました',status_err_key:'APIキーを入力してください',status_err_school:'教育庁/学校コードを入力',
+    status_err_cors:'CORSエラー。プロキシを試してください',status_err_parse:'メニュー解析失敗',status_err_nodata:'給食データなし(週末/休暇)',
+    status_err_fetch:'読み込み失敗: ',status_err_notfound:'商品が見つかりません',    status_success_meal_a:'品 (合計 ',status_success_meal_b:' kcal)',status_success_prod:' 読み込み完了',
+    recycle_title:'分別ガイド',recycle_subtitle:'バーコードで分別方法を確認',recycle_placeholder:'13桁のバーコードを入力',
+    recycle_search_btn:'検索',recycle_quick_search:'クイック:',recycle_recent_title:'最近',recycle_tips_title:'分別のコツ',
+    tip_1:'中身を空にして水ですすぐ',tip_2:'ラベルとフタは素材が違えば分別',
+    tip_3:'牛乳パックは「紙パック」へ、紙類とは別',tip_4:'コーティング紙コップは一般ごみ',
+    tip_5:'発泡スチロールは体積を減らす',tip_6:'ビニールは洗って乾かし束ねて出す',
+    label_packaging:'包装: ',label_category:'カテゴリ: ',label_barcode:'バーコード: ',
+    bin_plastic:'プラスチック',bin_vinyl:'ビニール',bin_paper:'紙類',bin_paper_pack:'紙パック',bin_glass:'ガラス瓶',bin_can:'缶/金属',bin_general:'一般ごみ',
+    method_pet:'透明PETボトル',method_hdpe:'高密度PE',method_pvc:'PVC',method_ldpe:'低密度PE',
+    method_pp:'ポリプロピレン',method_ps:'ポリスチレン',method_paper:'紙包装',method_paper_pack:'紙パック',
+    method_glass:'ガラス瓶',method_metal:'金属缶',method_general:'複合素材/リサイクル不可',
+    detail_pet:'ラベル除去、中身を空に、潰す',detail_hdpe:'中身を空にしすすぐ',detail_pvc:'中身を空に;一般ごみ推奨',
+    detail_ldpe:'きれいにして他のビニールと束ねる',detail_pp:'中身を空にしすすぐ',detail_ps:'中身を空に、発泡は圧縮',
+    detail_paper:'乾燥状態で、テープを剥がし折りたたむ',detail_paper_pack:'中身を空に、すすぎ、開いて乾かす',
+    detail_glass:'中身を空に、フタは別',detail_metal:'中身を空に、できるだけ潰す',detail_general:'複合素材→一般ごみ',
+    footer_text:'健康的な食事ときれいな地球を!',
+    day_sun:'日',day_mon:'月',day_tue:'火',day_wed:'水',day_thu:'木',day_fri:'金',day_sat:'土',
+    year:'年',month:'月',day:'日',
+    rest_title:'飲食店メニュー',rest_subtitle:'料理を検索して栄養情報を確認',
+    rest_placeholder:'料理名を入力',rest_search_btn:'検索',rest_popular:'人気:',rest_no_result:'見つかりません',
+    tt_title:'今日の時間割',tt_lunch:'昼休み',tt_edit:'編集',tt_save:'保存',tt_cancel:'取消',
+    tt_mon:'月',tt_tue:'火',tt_wed:'水',tt_thu:'木',tt_fri:'金',
+    tab_kiosk:'📱 キオスク',
+    kiosk_title:'キオスク注文ガイド',kiosk_subtitle:'キオスク画面の写真を撮ってアップロードすると、AIが手順を案内します',
+    kiosk_api_ph:'Gemini APIキーを入力するとAI分析が可能です',
+    kiosk_upload_text:'ここをクリックしてキオスクの写真をアップロード',kiosk_upload_hint:'または写真をここにドラッグ',
+    kiosk_analyze:'AI分析',kiosk_guide_title:'注文ガイド',kiosk_basic_title:'基本の使い方',
+    kiosk_basic_1:'まず画面下の「注文する」ボタンを押します',kiosk_basic_2:'食べたいメニューの写真をタッチします',
+    kiosk_basic_3:'セット/単品を選び、数量を決めます',kiosk_basic_4:'店内/持ち帰りを選びます',
+    kiosk_basic_5:'決済ボタンを押し、カードか現金を入れます',kiosk_basic_6:'レシートと注文番号を忘れずに',
+    kiosk_status_loading:'AIが分析中...',kiosk_status_nokey:'Gemini APIキーを入力してください',
+    kiosk_status_noimg:'先に写真をアップロードしてください',kiosk_status_err:'分析エラー: ',
+    tab_report:'🛡️ 安全掲示板',
+    report_title:'安全掲示板',report_subtitle:'危険な場所や障害物を写真付きで共有してください',
+    report_img_btn:'撮影 / アップロード',report_type_label:'通報タイプ',
+    report_type_1:'歩道の破損',report_type_2:'街灯の故障',report_type_3:'横断歩道の問題',
+    report_type_4:'通行障害物',report_type_5:'その他の危険',
+    report_loc_ph:'場所を入力 (例: ソウル市江南区)',report_loc_btn:'📍 現在地',
+    report_desc_ph:'状況を説明してください',report_submit:'通報する',
+    report_list_title:'通報一覧',report_status_new:'受付済',report_status_check:'確認中',report_status_done:'対応済',
+    report_delete:'削除',report_empty:'まだ通報はありません',report_success:'通報を受け付けました',
+    report_need_type:'通報タイプを選択してください',report_need_loc:'場所を入力してください',
+    report_need_desc:'説明を入力してください',report_need_img:'写真をアップロードしてください',
+    report_loc_get:'位置情報を取得しました',report_loc_fail:'位置情報を取得できません',
+    report_date_format:'{m}月{d}日 {h}:{min}',
+  }
+};
+
+let currentLang = 'ko';
+function t(key, lang) {
+  lang = lang || currentLang;
+  const d = T[lang];
+  if (d && d[key] !== undefined) return d[key];
+  if (d) {
+    for (const k in d) {
+      if (d[k] === T.ko[key]) return d[k];
+    }
+  }
+  return T.ko[key] || key;
+}
+
+function applyLanguage(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.toggle('active', b.dataset.lang === lang));
+  try { localStorage.setItem('app_lang', lang); } catch(e) {}
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.dataset.i18n;
+    if (T[lang] && T[lang][key]) el.textContent = T[lang][key];
+  });
+  document.querySelectorAll('[data-i18n-ph]').forEach(el => {
+    const key = el.dataset.i18nPh;
+    if (T[lang] && T[lang][key]) el.placeholder = T[lang][key];
+  });
+
+  updateDateBadge();
+  renderMeals();
+  updateNutrition();
+  renderRestMeals();
+  updateRestNutrition();
+  renderTTDaySelector();
+  renderTimetable();
+  renderRecent();
+}
+
+function setLang(lang) {
+  applyLanguage(lang);
+  if (document.querySelector('.tab-page.active').id === 'tab-recycle') {
+    const lastCode = document.getElementById('barcodeInput').value.trim();
+    if (lastCode && document.getElementById('barcodeProduct').innerHTML) {
+      searchBarcode();
+    }
+  }
+}
+
+function updateDateBadge() {
+  const w = [t('day_sun'),t('day_mon'),t('day_tue'),t('day_wed'),t('day_thu'),t('day_fri'),t('day_sat')];
+  const y = t('year'), m = t('month'), d = t('day');
+  document.getElementById('dateBadge').textContent =
+    (y ? today.getFullYear()+y : today.getFullYear()+' ') +
+    (today.getMonth()+1)+m+' '+today.getDate()+d+' ('+w[today.getDay()]+')';
+}
+
+// ── 공통 ──
+function setMode(mode) {
+  document.body.classList.remove('eldermode', 'studentmode');
+  if (mode === 'elder') document.body.classList.add('eldermode');
+  if (mode === 'student') document.body.classList.add('studentmode');
+  document.getElementById('normalModeBtn').classList.toggle('active', mode === 'normal');
+  document.getElementById('elderModeBtn').classList.toggle('active', mode === 'elder');
+  document.getElementById('studentModeBtn').classList.toggle('active', mode === 'student');
+  if (mode !== 'student' && document.getElementById('tab-meal').classList.contains('active')) {
+    switchTab('recycle');
+  }
+  if (mode !== 'elder' && document.getElementById('tab-kiosk').classList.contains('active')) {
+    switchTab('recycle');
+  }
+  try { localStorage.setItem('app_mode', mode); } catch(e) {}
+}
+function switchTab(tab) {
+  document.querySelectorAll('.tab-nav button').forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  document.querySelectorAll('.tab-page').forEach(p => p.classList.toggle('active', p.id === 'tab-' + tab));
+}
+
+// ── 급식 분석 ──
+const DAILY_NORM = { kcal:2200, carb:300, protein:55, fat:65 };
+const LOCAL_KEY = 'meal_app_config';
+const today = new Date();
+
+const FALLBACK_MEALS = [
+  { id:'rice',emoji:'🍚',name:'쌀밥',kcal:310,carb:67,protein:6,fat:1,guideKey:'guide_rice' },
+  { id:'soup',emoji:'🥣',name:'된장국',kcal:45,carb:4,protein:3,fat:2,guideKey:'guide_soup' },
+  { id:'meat',emoji:'🥩',name:'불고기',kcal:250,carb:12,protein:18,fat:14,guideKey:'guide_meat' },
+  { id:'kimchi',emoji:'🥬',name:'배추김치',kcal:15,carb:3,protein:1,fat:0,guideKey:'guide_kimchi' },
+  { id:'namul',emoji:'🥗',name:'시금치나물',kcal:30,carb:4,protein:2,fat:1,guideKey:'guide_namul' },
+  { id:'yogurt',emoji:'🥛',name:'요구르트',kcal:80,carb:14,protein:3,fat:1,guideKey:'guide_milk' },
+  { id:'apple',emoji:'🍎',name:'사과',kcal:57,carb:15,protein:0,fat:0,guideKey:'guide_fruit' },
+];
+let mealData = [...FALLBACK_MEALS];
+let selected = {};
+
+function loadApiConfig() {
+  try {
+    const saved = localStorage.getItem(LOCAL_KEY);
+    if (saved) {
+      const c = JSON.parse(saved);
+      document.getElementById('apiKey').value = c.key || '';
+      document.getElementById('officeCode').value = c.officeCode || '';
+      document.getElementById('schoolCode').value = c.schoolCode || '';
+      document.getElementById('proxyUrl').value = c.proxyUrl || '';
+      return;
+    }
+  } catch(e) {}
+}
+function saveApiConfig() {
+  localStorage.setItem(LOCAL_KEY, JSON.stringify({
+    key: document.getElementById('apiKey').value.trim(),
+    officeCode: document.getElementById('officeCode').value,
+    schoolCode: document.getElementById('schoolCode').value.trim(),
+    proxyUrl: document.getElementById('proxyUrl').value.trim()
+  }));
+  showStatus('success', t('status_saved'));
+}
+function getApiConfig() {
+  return {
+    key: document.getElementById('apiKey').value.trim(),
+    officeCode: document.getElementById('officeCode').value,
+    schoolCode: document.getElementById('schoolCode').value.trim(),
+    proxyUrl: document.getElementById('proxyUrl').value.trim()
+  };
+}
+function toggleConfig() { document.getElementById('configPanel').classList.toggle('open'); }
+function showStatus(type, msg) {
+  const el = document.getElementById('apiStatus');
+  el.className = 'api-status show ' + type; el.textContent = msg;
+  setTimeout(() => el.classList.remove('show'), 5000);
+}
+
+async function fetchMealApi() {
+  const c = getApiConfig();
+  if(!c.key){showStatus('error',t('status_err_key'));return}
+  if(!c.officeCode||!c.schoolCode){showStatus('error',t('status_err_school'));return}
+  showStatus('loading',t('status_loading_meal'));
+  const ymd = today.getFullYear()+('0'+(today.getMonth()+1)).slice(-2)+('0'+today.getDate()).slice(-2);
+  const base='https://open.neis.go.kr/hub/mealServiceDietInfo';
+  const params = new URLSearchParams({KEY:c.key,Type:'json',ATPT_OFCDC_SC_CODE:c.officeCode,SD_SCHUL_CODE:c.schoolCode,MLSV_YMD:ymd});
+  try {
+    let url = c.proxyUrl ? c.proxyUrl+encodeURIComponent(base+'?'+params) : base+'?'+params;
+    const res = await fetch(url);
+    const data = await res.json();
+    if(data.RESULT){showStatus('error',t('status_err_fetch')+data.RESULT.MESSAGE);return}
+    parseMealResponse(data);
+  } catch(e) {
+    if(!c.proxyUrl && (e.message.includes('Failed to fetch')||e.message.includes('NetworkError')))
+      showStatus('error',t('status_err_cors'));
+    else showStatus('error',t('status_err_fetch')+e.message);
+  }
+}
+function parseMealResponse(data) {
+  const rows = (data.mealServiceDietInfo||[])[1]?.row;
+  if(!rows||rows.length===0){showStatus('error',t('status_err_nodata'));return}
+  const row = rows.find(r=>r.MMEAL_SC_CODE==='2')||rows[0];
+  const dishes = (row.DDISH_NM||'').split('<br/>').map(d=>d.replace(/\([0-9.]+\)/g,'').replace(/\.[0-9.]*\.?$/g,'').trim()).filter(d=>d);
+  const tk = parseFloat(((row.CAL_INFO||'').match(/([\d.]+)\s*Kcal/i)||[])[1])||0;
+  const carb = parseFloat(((row.NTR_INFO||'').match(/탄수화물\s*\(g\)\s*:\s*([\d.]+)/i)||[])[1])||0;
+  const prot = parseFloat(((row.NTR_INFO||'').match(/단백질\s*\(g\)\s*:\s*([\d.]+)/i)||[])[1])||0;
+  const fat = parseFloat(((row.NTR_INFO||'').match(/지방\s*\(g\)\s*:\s*([\d.]+)/i)||[])[1])||0;
+  if(!dishes.length){showStatus('error',t('status_err_parse'));return}
+  mealData = dishes.map((n,i)=>({
+    id:'api_'+i, emoji:matchEmoji(n), name:n,
+    kcal:Math.round(tk/dishes.length),
+    carb:Math.round((carb/dishes.length)*10)/10,
+    protein:Math.round((prot/dishes.length)*10)/10,
+    fat:Math.round((fat/dishes.length)*10)/10,
+    guideKey:matchGuideKey(n)
+  }));
+  selected={}; renderMeals(); updateNutrition();
+  showStatus('success',dishes.length+t('status_success_meal_a')+tk+t('status_success_meal_b'));
+}
+function matchEmoji(n) {
+  if(/밥/.test(n))return'🍚'; if(/국|탕|찌개/.test(n))return'🥣';
+  if(/김치/.test(n))return'🥬'; if(/불고기|고기|닭|돈육|소불|제육|돈까스|함박|스테이크|탕수육/.test(n))return'🥩';
+  if(/생선|고등어|갈치|조기|연어|참치|꽁치|임연수|가자미|동태/.test(n))return'🐟';
+  if(/나물|샐러드|채소|숙주|콩나물/.test(n))return'🥗'; if(/우유|요구르트|요거트/.test(n))return'🥛';
+  if(/과일|사과|배|귤|오렌지|수박|참외|딸기|포도|바나나/.test(n))return'🍎';
+  if(/달걀|계란/.test(n))return'🥚'; if(/떡|빵|케이크/.test(n))return'🍞';
+  if(/만두|파스타|스파게티|짜장|라면|국수|우동/.test(n))return'🍝';
+  if(/주스|음료/.test(n))return'🧃'; if(/튀김|핫도그|치킨/.test(n))return'🍗'; if(/피자/.test(n))return'🍕';
+  return'🍽️';
+}
+function matchGuideKey(n) {
+  if(/밥/.test(n))return'guide_rice'; if(/국|탕|찌개/.test(n))return'guide_soup';
+  if(/김치/.test(n))return'guide_kimchi';
+  if(/불고기|고기|생선|닭|돈육|스테이크|함박|돈까스/.test(n))return'guide_meat';
+  if(/나물|샐러드/.test(n))return'guide_namul';
+  if(/우유|요구르트|주스|음료/.test(n))return'guide_milk';
+  if(/과일|사과|배|귤/.test(n))return'guide_fruit'; if(/떡|빵|케이크/.test(n))return'guide_bread';
+  if(/튀김|치킨|핫도그/.test(n))return'guide_fried'; return'guide_default';
+}
+
+function renderMeals() {
+  document.getElementById('mealList').innerHTML = mealData.map(m=>`
+    <div class="meal-card ${selected[m.id]?'selected':''}" onclick="toggleMeal('${m.id}')">
+      <div class="emoji">${m.emoji}</div>
+      <div class="info"><div class="name">${m.name}</div><div class="kcal">${m.kcal} kcal</div><div class="guide">${t(m.guideKey)}</div></div>
+      <div class="checkbox"></div>
+    </div>`).join('');
+}
+function toggleMeal(id) { selected[id]?delete selected[id]:selected[id]=true; renderMeals(); updateNutrition(); }
+function updateNutrition() {
+  const ids = Object.keys(selected);
+  let t_={kcal:0,carb:0,protein:0,fat:0};
+  ids.forEach(i=>{const m=mealData.find(x=>x.id===i);if(m){t_.kcal+=m.kcal;t_.carb+=m.carb;t_.protein+=m.protein;t_.fat+=m.fat}});
+  document.getElementById('totalKcal').textContent=Math.round(t_.kcal);
+  const ns=[
+    {label:t('nutrient_carb'),value:t_.carb,norm:DAILY_NORM.carb,cls:'bar-carb'},
+    {label:t('nutrient_protein'),value:t_.protein,norm:DAILY_NORM.protein,cls:'bar-protein'},
+    {label:t('nutrient_fat'),value:t_.fat,norm:DAILY_NORM.fat,cls:'bar-fat'}
+  ];
+  document.getElementById('nutrientBars').innerHTML=ns.map(n=>{
+    const pct=Math.min(100,Math.round(n.value/n.norm*100));
+    return `<div class="nutrient-row"><div class="label">${n.label}</div><div class="bar-wrap"><div class="bar-fill ${n.cls}" style="width:${pct}%"></div></div><div class="value">${n.value.toFixed(1)}g / ${n.norm}g (${pct}%)</div></div>`;
+  }).join('');
+  const kcalPct=Math.round(t_.kcal/DAILY_NORM.kcal*100);
+  document.getElementById('cardKcal').textContent=Math.round(t_.kcal).toLocaleString();
+  document.getElementById('cardPercent').textContent=kcalPct+'%';
+  const hasRice=ids.some(i=>{const m=mealData.find(x=>x.id===i);return m&&/밥/.test(m.name)});
+  let sg='-';
+  if(hasRice){if(kcalPct<40)sg=t('spoon_more');else if(kcalPct<70)sg=t('spoon_ok');else if(kcalPct<100)sg=t('spoon_enough');else sg=t('spoon_full');}
+  else if(ids.length)sg=t('spoon_with_rice');
+  document.getElementById('cardGuide').textContent=sg;
+  let bal='-';
+  if(ids.length){
+    const cp=Math.round(t_.carb/DAILY_NORM.carb*100),pp=Math.round(t_.protein/DAILY_NORM.protein*100);
+    if(cp<20&&pp<20)bal=t('balance_more');else if(pp>cp+30)bal=t('balance_high_prot');else if(cp>pp+50)bal=t('balance_high_carb');else bal=t('balance_good');
+  }
+  document.getElementById('cardBalance').textContent=bal;
+}
+function resetAll(){selected={};renderMeals();updateNutrition();}
+
+// ── 분리수거 ──
+const RECYCLE_GUIDE = {
+  PET:{icon:'♳',binKey:'bin_plastic',methodKey:'method_pet',detailKey:'detail_pet'},
+  HDPE:{icon:'♴',binKey:'bin_plastic',methodKey:'method_hdpe',detailKey:'detail_hdpe'},
+  PVC:{icon:'♵',binKey:'bin_plastic',methodKey:'method_pvc',detailKey:'detail_pvc'},
+  LDPE:{icon:'♶',binKey:'bin_vinyl',methodKey:'method_ldpe',detailKey:'detail_ldpe'},
+  PP:{icon:'♷',binKey:'bin_plastic',methodKey:'method_pp',detailKey:'detail_pp'},
+  PS:{icon:'♸',binKey:'bin_plastic',methodKey:'method_ps',detailKey:'detail_ps'},
+  PAPER:{icon:'📄',binKey:'bin_paper',methodKey:'method_paper',detailKey:'detail_paper'},
+  PAPER_PACK:{icon:'🧃',binKey:'bin_paper_pack',methodKey:'method_paper_pack',detailKey:'detail_paper_pack'},
+  GLASS:{icon:'🍾',binKey:'bin_glass',methodKey:'method_glass',detailKey:'detail_glass'},
+  METAL:{icon:'🥫',binKey:'bin_can',methodKey:'method_metal',detailKey:'detail_metal'},
+  GENERAL:{icon:'🗑️',binKey:'bin_general',methodKey:'method_general',detailKey:'detail_general'},
+};
+
+function classifyMaterial(text, packagings) {
+  const t = (text||'').toLowerCase();
+  if (packagings && packagings.length > 0) {
+    const mats = packagings.map(p => (p.material||'').toLowerCase());
+    const result = [];
+    if (mats.some(m => m.includes('pet') || m.includes('polyethylene terephthalate'))) result.push('PET');
+    if (mats.some(m => m.includes('hdpe') || m.includes('high density polyethylene'))) result.push('HDPE');
+    if (mats.some(m => m.includes('pvc') || m.includes('polyvinyl chloride'))) result.push('PVC');
+    if (mats.some(m => m.includes('ldpe') || m.includes('low density polyethylene'))) result.push('LDPE');
+    if (mats.some(m => m.includes('pp') || m.includes('polypropylene')) && !mats.some(m=>m.includes('paper'))) result.push('PP');
+    if (mats.some(m => m.includes('ps') || m.includes('polystyrene'))) result.push('PS');
+    if (mats.some(m => m.includes('paper') || m.includes('cardboard'))) {
+      if (mats.some(m => m.includes('aluminium') || m.includes('aluminum') || m.includes('plastic'))) result.push('PAPER_PACK');
+      else result.push('PAPER');
+    }
+    if (mats.some(m => m.includes('glass'))) result.push('GLASS');
+    if (mats.some(m => m.includes('metal') || m.includes('aluminium') || m.includes('steel') || m.includes('tin'))) result.push('METAL');
+    if (result.length > 0) return result;
+  }
+  const result = [];
+  if (/pet|polyethylene terephthalate|페트/.test(t) && !/paper|cardboard|종이/.test(t)) result.push('PET');
+  if (/hdpe|high density polyethylene/.test(t)) result.push('HDPE');
+  if (/pvc|polyvinyl chloride/.test(t)) result.push('PVC');
+  if (/ldpe|low density polyethylene|비닐/.test(t)) result.push('LDPE');
+  if (/pp\b|polypropylene|폴리프로필렌/.test(t) && !/paper|종이/.test(t)) result.push('PP');
+  if (/ps\b|polystyrene|스티로폼/.test(t)) result.push('PS');
+  if (/tetra\s*pak|종이팩/.test(t)) result.push('PAPER_PACK');
+  else if (/paper|cardboard|box\b|carton|종이|골판지/.test(t)) result.push('PAPER');
+  if (/glass|유리|verre/.test(t)) result.push('GLASS');
+  if (/aluminium|aluminum|metal|steel|tin\b|can\b|캔|금속|알루미늄/.test(t)) result.push('METAL');
+  if (/plastic|plastique|plástico|플라스틱/.test(t) && result.length === 0) result.push('PP');
+  if (result.length === 0) result.push('GENERAL');
+  return result;
+}
+
+function quickSearch(code) {
+  document.getElementById('barcodeInput').value = code;
+  searchBarcode();
+}
+
+async function searchBarcode() {
+  const code = document.getElementById('barcodeInput').value.trim();
+  if (!code || code.length < 8) {
+    document.getElementById('barcodeStatus').className = 'api-status show error';
+    document.getElementById('barcodeStatus').textContent = t('recycle_placeholder');
+    return;
+  }
+  const st = document.getElementById('barcodeStatus');
+  st.className = 'api-status show loading'; st.textContent = t('status_loading_prod');
+  document.getElementById('barcodeProduct').innerHTML = '';
+  document.getElementById('barcodeRecycle').innerHTML = '';
+
+  try {
+    const res = await fetch('https://world.openfoodfacts.org/api/v2/product/' + code + '.json');
+    const data = await res.json();
+    renderBarcodeResult(data, code);
+    saveRecent(code, (data.product||{}).product_name||code);
+  renderRecent();
+  if (document.getElementById('tab-report')) renderReportList();
+  } catch(e) {
+    st.className = 'api-status show error';
+    st.textContent = t('status_err_fetch') + e.message;
+  }
+}
+
+function renderBarcodeResult(data, code) {
+  const st = document.getElementById('barcodeStatus');
+  const product = data.product || {};
+
+  if (data.status === 0 || !product) {
+    st.className = 'api-status show error';
+    st.textContent = t('status_err_notfound') + (data.status_verbose ? ' (' + data.status_verbose + ')' : '');
+    return;
+  }
+  st.className = 'api-status show success';
+  st.textContent = (product.product_name || '?') + t('status_success_prod');
+
+  const imgUrl = product.image_url || product.image_small_url || '';
+  const name = product.product_name || '?';
+  const brand = product.brands || '';
+  let html = '<div class="product-card"><div class="product-header">';
+  if (imgUrl) html += '<img class="product-img" src="' + imgUrl + '" alt="" onerror="this.style.display=\'none\'">';
+  html += '<div><div class="product-name">' + name + '</div>';
+  if (brand) html += '<div class="product-brand">' + brand + '</div>';
+  html += '<div class="product-brand meta-text">' + t('label_barcode') + code + '</div></div></div></div>';
+  document.getElementById('barcodeProduct').innerHTML = html;
+
+  const packaging = product.packaging || '';
+  const packagings = product.packagings || [];
+  const materials = classifyMaterial(packaging, packagings);
+
+  let rhtml = '<div class="section-title" style="margin-top:0">' + t('recycle_title').replace('분리수거 안내','분리수거 방법').replace('分类回收指南','回收方法').replace('Hướng Dẫn Tái Chế','Cách Tái Chế').replace('分別ガイド','分別方法') + '</div>';
+  materials.forEach(mat => {
+    const g = RECYCLE_GUIDE[mat] || RECYCLE_GUIDE.GENERAL;
+    rhtml += '<div class="recycle-card"><div class="r-icon">' + g.icon + '</div><div class="r-info"><div class="r-bin">' + t(g.binKey) + ' (' + t(g.methodKey) + ')</div><div class="r-method">' + t(g.detailKey) + '</div></div></div>';
+  });
+  if (packaging) rhtml += '<div class="meta-text">' + t('label_packaging') + packaging + '</div>';
+  else if (product.categories) rhtml += '<div class="meta-text">' + t('label_category') + product.categories + '</div>';
+
+  document.getElementById('barcodeRecycle').innerHTML = rhtml;
+}
+
+function scanBarcodeImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const st = document.getElementById('barcodeStatus');
+  st.className = 'api-status show loading';
+  st.textContent = '바코드 인식 중...';
+
+  const html5QrCode = new Html5Qrcode("barcodeInput");
+  html5QrCode.scanFile(file, true)
+    .then(decodedText => {
+      document.getElementById('barcodeInput').value = decodedText;
+      html5QrCode.clear();
+      searchBarcode();
+    })
+    .catch(err => {
+      st.className = 'api-status show error';
+      st.textContent = '바코드를 인식할 수 없어요. 다른 사진을 시도해보세요.';
+      html5QrCode.clear();
+      setTimeout(() => st.classList.remove('show'), 4000);
+    });
+}
+
+function saveRecent(code, name) {
+  try {
+    let list = JSON.parse(localStorage.getItem('barcode_history') || '[]');
+    list = list.filter(x => x.code !== code);
+    list.unshift({ code, name, time: Date.now() });
+    if (list.length > 10) list.length = 10;
+    localStorage.setItem('barcode_history', JSON.stringify(list));
+  } catch(e) {}
+}
+function renderRecent() {
+  try {
+    const list = JSON.parse(localStorage.getItem('barcode_history') || '[]');
+    document.getElementById('recentList').innerHTML = list.map(x =>
+      '<button class="recent-item" onclick="quickSearch(\'' + x.code + '\')">' + x.name + '</button>'
+    ).join('');
+  } catch(e) {}
+  document.getElementById('barcodeStatus').className = 'api-status';
+}
+
+// ── 음식점 메뉴 ──
+let restSelected = {};
+let restMeals = [];
+
+let jsonpCallbackId = 0;
+
+function searchFood() {
+  const q = document.getElementById('foodSearch').value.trim();
+  if (!q) return;
+  const apiUrl = (document.getElementById('foodApiUrl')?.value || '').trim();
+  if (!apiUrl) {
+    window.open('https://various.foodsafetykorea.go.kr/nutrient/general/food/firstList.do?searchType=food&searchWord=' + encodeURIComponent(q), '_blank');
+    return;
+  }
+  const st = document.getElementById('foodResultStatus');
+  const isForeign = currentLang !== 'ko';
+  st.className = 'api-status show loading';
+  st.textContent = isForeign ? '검색어 번역 + DB 검색 중...' : 'DB 검색 중...';
+  const cbName = 'jsonpCB_' + (++jsonpCallbackId);
+  const gKey = (document.getElementById('geminiKey2')?.value || '').trim();
+  window[cbName] = function(data) {
+    delete window[cbName];
+    const s = document.getElementById('script_' + cbName);
+    if (s) document.body.removeChild(s);
+    const raw = data.items || [];
+    const isTr = isForeign && gKey && currentLang !== 'ko';
+    restMeals = raw.map((item, i) => {
+      const korName = item['식품명'] || '';
+      const displayName = isTr ? (item['식품명_번역'] || korName) : korName;
+      const displayGroup = isTr ? (item['식품대분류명_번역'] || item['식품대분류명'] || '') : (item['식품대분류명'] || '');
+      const displayCap = isTr ? (item['영양성분함량기준량_번역'] || item['영양성분함량기준량'] || '100g') : (item['영양성분함량기준량'] || '100g');
+      return {
+        id: 'food_' + i,
+        emoji: matchFoodEmoji(displayName || korName),
+        name: displayName,
+        group: displayGroup,
+        foodCd: item['식품코드'] || '',
+        kcal: parseFloat(item['에너지(kcal)']) || 0,
+        carb: parseFloat(item['탄수화물(g)']) || 0,
+        protein: parseFloat(item['단백질(g)']) || 0,
+        fat: parseFloat(item['지방(g)']) || 0,
+        natrium: parseFloat(item['나트륨(mg)']) || 0,
+        capacity: displayCap,
+        guideKey: matchFoodGuide(displayName || korName)
+      };
+    });
+    if (restMeals.length === 0) {
+      st.className = 'api-status show error'; st.textContent = '결과가 없어요';
+    } else {
+      st.className = 'api-status show success'; st.textContent = restMeals.length + '개 결과';
+    }
+    renderRestMeals();
+    setTimeout(() => st.classList.remove('show'), 3000);
+  };
+  let url = apiUrl + (apiUrl.includes('?') ? '&' : '?') + 'action=search&q=' + encodeURIComponent(q) + '&limit=30&lang=' + currentLang + '&callback=' + cbName;
+  if (gKey && currentLang !== 'ko') url += '&apiKey=' + encodeURIComponent(gKey);
+  const script = document.createElement('script');
+  script.id = 'script_' + cbName;
+  script.src = url;
+  script.onerror = () => {
+    st.className = 'api-status show error'; st.textContent = 'API 응답 없음';
+    delete window[cbName];
+  };
+  document.body.appendChild(script);
+  setTimeout(() => {
+    if (window[cbName]) {
+      st.className = 'api-status show error'; st.textContent = '시간 초과. 다시 시도해 주세요.';
+      delete window[cbName];
+    }
+  }, 30000);
+}
+
+function matchFoodEmoji(name) {
+  if (/밥|현미|잡곡/.test(name)) return '🍚'; if (/국|탕|찌개|수프/.test(name)) return '🥘';
+  if (/김치/.test(name)) return '🥬'; if (/고기|불고기|닭|스테이크|돈까스|삼겹살|갈비|육/.test(name)) return '🥩';
+  if (/생선|고등어|갈치|조기|연어|참치|회|어|대구|명태/.test(name)) return '🐟';
+  if (/나물|샐러드|채소|시금치|상추|배추|된장/.test(name)) return '🥗';
+  if (/우유|요구르트|요거트|라떼|두유/.test(name)) return '🥛';
+  if (/과일|사과|배|귤|오렌지|딸기|포도|바나나|수박|감/.test(name)) return '🍎';
+  if (/계란|달걀|란/.test(name)) return '🥚'; if (/떡|빵|케이크|머핀|크로와상|빵류/.test(name)) return '🍞';
+  if (/만두|파스타|스파게티|짜장|라면|국수|우동|쫄면|면/.test(name)) return '🍝';
+  if (/주스|음료|스무디|차|커피/.test(name)) return '🧃';
+  if (/튀김|핫도그|치킨|윙|후라이드/.test(name)) return '🍗'; if (/피자/.test(name)) return '🍕';
+  if (/전|부침|호떡|빈대떡/.test(name)) return '🥞'; if (/순대|소시지/.test(name)) return '🌭';
+  if (/초밥|유부|스시/.test(name)) return '🍣'; if (/죽/.test(name)) return '🥣';
+  if (/너겟|가라아게|소세지|햄/.test(name)) return '🍗';
+  return '🍽️';
+}
+
+function matchFoodGuide(name) {
+  if (/밥|현미|잡곡/.test(name)) return 'guide_rice';
+  if (/국|탕|찌개|수프|라면|국수|우동/.test(name)) return 'guide_soup';
+  if (/김치/.test(name)) return 'guide_kimchi';
+  if (/고기|불고기|닭|스테이크|돈까스|생선|회|갈비|해물/.test(name)) return 'guide_meat';
+  if (/나물|샐러드|채소|시금치|과일|사과/.test(name)) return 'guide_namul';
+  if (/우유|요구르트|두유|음료/.test(name)) return 'guide_milk';
+  if (/떡|빵/.test(name)) return 'guide_bread';
+  if (/튀김|치킨/.test(name)) return 'guide_fried';
+  return 'guide_default';
+}
+
+function quickFoodSearch(name) {
+  document.getElementById('foodSearch').value = name;
+  searchFood();
+}
+
+function renderRestMeals() {
+  document.getElementById('foodMealList').innerHTML = restMeals.map(m => {
+    const sel = restSelected[m.id];
+    const count = sel ? (sel.count || 1) : 1;
+    const unit = m.capacity || '100g';
+    const selectedCls = sel ? 'selected' : '';
+    return `<div class="meal-card ${selectedCls}" onclick="toggleRestMeal('${m.id}')">
+      <div class="emoji">${m.emoji}</div>
+      <div class="info"><div class="name">${m.name}</div><div class="kcal">${(m.kcal*count).toFixed(0)} kcal <span style="font-size:11px;color:var(--text-light)">${m.group} · ${unit}</span></div><div class="guide">${t(m.guideKey)}</div>
+      ${sel ? `<div class="count-control" onclick="event.stopPropagation()">
+        <button onclick="changeFoodCount('${m.id}', -0.5)">−</button>
+        <span class="count-val">${count} 인분</span>
+        <button onclick="changeFoodCount('${m.id}', 0.5)">+</button>
+      </div>` : ''}
+      </div>
+      <div class="checkbox"></div>
+    </div>`;
+  }).join('');
+}
+
+function toggleRestMeal(id) {
+  if (restSelected[id]) {
+    delete restSelected[id];
+  } else {
+    restSelected[id] = { count: 1 };
+  }
+  renderRestMeals();
+  updateRestNutrition();
+}
+
+function changeFoodCount(id, delta) {
+  if (!restSelected[id]) return;
+  restSelected[id].count = Math.max(0.5, (restSelected[id].count || 1) + delta);
+  renderRestMeals();
+  updateRestNutrition();
+}
+
+function updateRestNutrition() {
+  const ids = Object.keys(restSelected);
+  let tot = { kcal:0, carb:0, protein:0, fat:0, natrium:0 };
+  ids.forEach(i => {
+    const m = restMeals.find(x => x.id === i);
+    if (m) {
+      const c = restSelected[i].count || 1;
+      tot.kcal += m.kcal * c;
+      tot.carb += m.carb * c;
+      tot.protein += m.protein * c;
+      tot.fat += m.fat * c;
+      tot.natrium += m.natrium * c;
+    }
+  });
+  const ns = [
+    { label: t('nutrient_carb'), value: tot.carb, norm: DAILY_NORM.carb, cls: 'bar-carb' },
+    { label: t('nutrient_protein'), value: tot.protein, norm: DAILY_NORM.protein, cls: 'bar-protein' },
+    { label: t('nutrient_fat'), value: tot.fat, norm: DAILY_NORM.fat, cls: 'bar-fat' }
+  ];
+  const barEl = document.getElementById('restNutrientBars');
+  if (barEl) barEl.innerHTML = ns.map(n => {
+    const pct = Math.min(100, Math.round(n.value / n.norm * 100));
+    return `<div class="nutrient-row"><div class="label">${n.label}</div><div class="bar-wrap"><div class="bar-fill ${n.cls}" style="width:${pct}%"></div></div><div class="value">${n.value.toFixed(1)}g / ${n.norm}g (${pct}%)</div></div>`;
+  }).join('');
+  const totEl = document.getElementById('restTotalKcal'); if (totEl) totEl.textContent = Math.round(tot.kcal);
+  const kcalEl = document.getElementById('restCardKcal'); if (kcalEl) kcalEl.textContent = Math.round(tot.kcal).toLocaleString();
+  const pctEl = document.getElementById('restCardPercent'); if (pctEl) pctEl.textContent = Math.round(tot.kcal / DAILY_NORM.kcal * 100) + '%';
+  const natEl = document.getElementById('restNutrium'); if (natEl) natEl.textContent = Math.round(tot.natrium) + ' mg';
+
+  const kcalPct = Math.round(tot.kcal / DAILY_NORM.kcal * 100);
+  const hasRice = ids.some(i => { const m = restMeals.find(x => x.id === i); return m && /밥/.test(m.name); });
+  let sg = '-';
+  if (hasRice) { if (kcalPct < 40) sg = t('spoon_more'); else if (kcalPct < 70) sg = t('spoon_ok'); else if (kcalPct < 100) sg = t('spoon_enough'); else sg = t('spoon_full'); }
+  else if (ids.length) sg = t('spoon_with_rice');
+  const guideEl = document.getElementById('restCardGuide'); if (guideEl) guideEl.textContent = sg;
+
+  let bal = '-';
+  if (ids.length) {
+    const cp = Math.round(tot.carb / DAILY_NORM.carb * 100);
+    const pp = Math.round(tot.protein / DAILY_NORM.protein * 100);
+    if (cp < 20 && pp < 20) bal = t('balance_more');
+    else if (pp > cp + 30) bal = t('balance_high_prot');
+    else if (cp > pp + 50) bal = t('balance_high_carb');
+    else bal = t('balance_good');
+  }
+  const balEl = document.getElementById('restCardBalance'); if (balEl) balEl.textContent = bal;
+}
+
+function resetRestAll() { restSelected = {}; renderRestMeals(); updateRestNutrition(); }
+
+// ── 시간표 ──
+const TT_PERIODS = [
+  {time:'08:40~09:30'},{time:'09:40~10:30'},{time:'10:40~11:30'},{time:'11:40~12:30'},
+  {time:'12:30~13:30', lunch:true},{time:'13:30~14:20'},{time:'14:30~15:20'},{time:'15:30~16:20'},
+];
+
+const TT_DEFAULT = {
+  mon: ['국어','수학','영어','과학','점심시간','사회','체육','음악'],
+  tue: ['영어','수학','국어','역사','점심시간','과학','미술','창체'],
+  wed: ['수학','영어','과학','국어','점심시간','사회','체육','동아리'],
+  thu: ['국어','과학','수학','영어','점심시간','역사','음악','창체'],
+  fri: ['영어','수학','사회','과학','점심시간','국어','체육','동아리'],
+};
+
+let ttData = {};
+let ttEditing = null;
+
+function initTTData() {
+  const days = ['mon','tue','wed','thu','fri'];
+  ttData = {};
+  days.forEach(d => {
+    ttData[d] = TT_PERIODS.map((p, i) => ({
+      time: p.time, subj: TT_DEFAULT[d][i] || '', lunch: p.lunch || false
+    }));
+  });
+}
+
+function loadTT() {
+  try {
+    const saved = localStorage.getItem('tt_data');
+    if (saved) { ttData = JSON.parse(saved); return; }
+  } catch(e) {}
+  initTTData();
+}
+
+function saveTT() {
+  try { localStorage.setItem('tt_data', JSON.stringify(ttData)); } catch(e) {}
+}
+
+function renderTTDaySelector() {
+  const days = ['mon','tue','wed','thu','fri'];
+  let todayIdx = today.getDay() - 1;
+  if (todayIdx < 0 || todayIdx > 4) todayIdx = 0;
+  const labels = [t('tt_mon'),t('tt_tue'),t('tt_wed'),t('tt_thu'),t('tt_fri')];
+  document.getElementById('ttDaySelector').innerHTML = days.map((d, i) =>
+    `<button class="tt-day-btn ${i===todayIdx?'active':''}" onclick="switchTTDay('${d}')">${labels[i]}</button>`
+  ).join('');
+}
+
+function switchTTDay(day) {
+  renderTimetable(day);
+}
+
+function renderTimetable(day) {
+  if (!day) {
+    let ti = today.getDay() - 1;
+    if (ti < 0 || ti > 4) ti = 0;
+    day = ['mon','tue','wed','thu','fri'][ti];
+  }
+  const periods = ttData[day] || [];
+  const now = today.getHours() * 60 + today.getMinutes();
+
+  document.getElementById('timetableContainer').innerHTML = periods.map((p, i) => {
+    const [sh, sm] = (p.time.split('~')[0]||'00:00').split(':').map(Number);
+    const [eh, em] = (p.time.split('~')[1]||'00:00').split(':').map(Number);
+    const startM = sh * 60 + sm, endM = eh * 60 + em;
+    const isNow = now >= startM && now < endM && today.getDay() >= 1 && today.getDay() <= 5;
+    const isLunch = p.lunch;
+    const cls = isLunch ? 'lunch' : (isNow ? 'now' : '');
+    const subjName = p.lunch ? t('tt_lunch') : p.subj;
+    const editing = ttEditing === day + '_' + i;
+
+    if (editing) {
+      return `<div class="timetable-row ${cls}">
+        <div class="tt-time">${p.time}</div>
+        <div class="tt-edit-inline">
+          <input type="text" id="ttEditInput_${i}" value="${p.subj}">
+          <button class="tt-edit-save" onclick="saveTTCell('${day}',${i})">${t('tt_save')}</button>
+          <button class="tt-edit-cancel" onclick="cancelTTEdit()">${t('tt_cancel')}</button>
+        </div>
+      </div>`;
+    }
+    return `<div class="timetable-row ${cls}">
+      <div class="tt-time">${p.time}</div>
+      <div class="tt-subject">${subjName}</div>
+      <button class="tt-edit-btn" onclick="startTTEdit('${day}',${i})">✏️</button>
+    </div>`;
+  }).join('');
+
+  document.querySelectorAll('.tt-day-btn').forEach((btn, i) => {
+    btn.classList.toggle('active', ['mon','tue','wed','thu','fri'][i] === day);
+  });
+}
+
+function startTTEdit(day, idx) {
+  ttEditing = day + '_' + idx;
+  renderTimetable(day);
+}
+
+function saveTTCell(day, idx) {
+  const input = document.getElementById('ttEditInput_' + idx);
+  if (input && ttData[day] && ttData[day][idx]) {
+    ttData[day][idx].subj = input.value.trim() || '공강';
+  }
+  ttEditing = null;
+  saveTT();
+  renderTimetable(day);
+}
+
+function cancelTTEdit() {
+  ttEditing = null;
+  let ti = today.getDay() - 1;
+  if (ti < 0 || ti > 4) ti = 0;
+  renderTimetable(['mon','tue','wed','thu','fri'][ti]);
+}
+
+// ── 키오스크 가이드 ──
+let kioskImageData = null;
+
+function loadGeminiKey() {
+  try {
+    const saved = localStorage.getItem('gemini_key');
+    if (saved) { document.getElementById('geminiKey').value = saved; return; }
+  } catch(e) {}
+  document.getElementById('geminiKey').value = '';
+}
+
+function saveGeminiKey() {
+  const key = document.getElementById('geminiKey').value.trim();
+  try { localStorage.setItem('gemini_key', key); } catch(e) {}
+  showKioskStatus('success', t('status_saved'));
+}
+
+function handleKioskUpload(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  readKioskFile(file);
+}
+
+function handleKioskDrop(event) {
+  const file = event.dataTransfer.files[0];
+  if (!file) return;
+  readKioskFile(file);
+}
+
+function readKioskFile(file) {
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    kioskImageData = e.target.result;
+    document.getElementById('kioskPreviewImg').src = kioskImageData;
+    document.getElementById('kioskPreview').style.display = 'block';
+    document.getElementById('kioskUpload').style.display = 'none';
+    document.getElementById('kioskAnalyzeBtn').style.display = 'block';
+    document.getElementById('kioskGuide').innerHTML = '';
+    document.getElementById('kioskGuideTitle').style.display = 'none';
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeKioskImage() {
+  kioskImageData = null;
+  document.getElementById('kioskPreview').style.display = 'none';
+  document.getElementById('kioskUpload').style.display = 'block';
+  document.getElementById('kioskAnalyzeBtn').style.display = 'none';
+  document.getElementById('kioskFile').value = '';
+  document.getElementById('kioskGuide').innerHTML = '';
+  document.getElementById('kioskGuideTitle').style.display = 'none';
+  document.getElementById('kioskStatus').className = 'api-status';
+}
+
+function showKioskStatus(type, msg) {
+  const el = document.getElementById('kioskStatus');
+  el.className = 'api-status show ' + type;
+  el.textContent = msg;
+  if (type === 'success') setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+async function analyzeKiosk() {
+  const key = document.getElementById('geminiKey').value.trim();
+  if (!key) { showKioskStatus('error', t('kiosk_status_nokey')); return; }
+  if (!kioskImageData) { showKioskStatus('error', t('kiosk_status_noimg')); return; }
+
+  showKioskStatus('loading', t('kiosk_status_loading'));
+
+  const base64Data = kioskImageData.split(',')[1];
+  const mimeType = kioskImageData.match(/data:(image\/\w+);/)[1];
+
+  const prompt = currentLang === 'ko' ?
+    '이 키오스크 화면 사진을 보고, 사용자가 메뉴를 주문하려면 어떤 순서로 어디를 눌러야 하는지 단계별로 설명해줘. 노약자도 이해할 수 있게 아주 쉽고 친절하게 설명해줘. 각 단계는 "1단계: ...", "2단계: ..." 형식으로 써줘.' :
+    'Look at this kiosk screen photo and explain step by step where the user needs to press to order food. Use the format "Step 1: ...", "Step 2: ..." to make it very easy to understand.';
+
+  try {
+    const res = await fetch(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=' + key,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: mimeType, data: base64Data } }
+            ]
+          }]
+        })
+      }
+    );
+    const data = await res.json();
+    if (data.error) { showKioskStatus('error', t('kiosk_status_err') + data.error.message); return; }
+    const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+    if (!text) { showKioskStatus('error', t('kiosk_status_err') + 'empty response'); return; }
+    renderKioskGuide(text);
+    showKioskStatus('success', t('status_success_prod'));
+  } catch(e) {
+    showKioskStatus('error', t('kiosk_status_err') + e.message);
+  }
+}
+
+function renderKioskGuide(text) {
+  const lines = text.split('\n').filter(l => l.trim());
+  let steps = [];
+  lines.forEach(line => {
+    const m = line.match(/(?:Step|단계|步骤|Bước)\s*\d+|(\d+)[\.:：、]/i);
+    if (m) {
+      steps.push({ num: steps.length + 1, text: line.replace(/^(?:Step|단계|步骤|Bước)\s*\d+[\.:：、\s]*/i, '').replace(/^\d+[\.:：、\s]*/, '').trim() });
+    } else if (steps.length > 0) {
+      steps[steps.length - 1].text += ' ' + line.trim();
+    } else {
+      steps.push({ num: 1, text: line.trim() });
+    }
+  });
+  if (steps.length === 0) steps = [{ num: 1, text: text }];
+
+  document.getElementById('kioskGuideTitle').style.display = 'flex';
+  document.getElementById('kioskGuide').innerHTML = steps.map(s =>
+    `<div class="kiosk-step"><div class="step-num">${s.num}</div><div class="step-text">${s.text}</div></div>`
+  ).join('');
+}
+
+// ── 안전 신고 ──
+let reportImageData = null;
+let reportList = [];
+
+function loadReports() {
+  try {
+    const saved = localStorage.getItem('report_list');
+    reportList = saved ? JSON.parse(saved) : [];
+  } catch(e) { reportList = []; }
+}
+
+function saveReports() {
+  try { localStorage.setItem('report_list', JSON.stringify(reportList)); } catch(e) {}
+}
+
+function handleReportImage(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    reportImageData = e.target.result;
+    document.getElementById('reportImgPreview').innerHTML =
+      `<div class="report-img-preview"><img src="${reportImageData}" alt=""><button class="rm-btn" onclick="removeReportImage()">✕</button></div>`;
+  };
+  reader.readAsDataURL(file);
+}
+
+function removeReportImage() {
+  reportImageData = null;
+  document.getElementById('reportImgPreview').innerHTML = '';
+  document.getElementById('reportFile').value = '';
+}
+
+function getReportLocation() {
+  if (!navigator.geolocation) {
+    showReportStatus('error', t('report_loc_fail'));
+    return;
+  }
+  showReportStatus('loading', '위치 확인 중...');
+  navigator.geolocation.getCurrentPosition(
+    async pos => {
+      const lat = pos.coords.latitude;
+      const lon = pos.coords.longitude;
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&accept-language=${currentLang}`);
+        const data = await res.json();
+        const addr = data.display_name || (lat.toFixed(6) + ', ' + lon.toFixed(6));
+        document.getElementById('reportLoc').value = addr;
+        showReportStatus('success', t('report_loc_get'));
+      } catch(e) {
+        document.getElementById('reportLoc').value = lat.toFixed(6) + ', ' + lon.toFixed(6);
+        showReportStatus('success', t('report_loc_get'));
+      }
+    },
+    () => { showReportStatus('error', t('report_loc_fail')); },
+    { enableHighAccuracy: true, timeout: 10000 }
+  );
+}
+
+function submitReport() {
+  const type = document.getElementById('reportType').value;
+  const loc = document.getElementById('reportLoc').value.trim();
+  const desc = document.getElementById('reportDesc').value.trim();
+
+  if (!type) { showReportStatus('error', t('report_need_type')); return; }
+  if (!loc) { showReportStatus('error', t('report_need_loc')); return; }
+  if (!desc) { showReportStatus('error', t('report_need_desc')); return; }
+  if (!reportImageData) { showReportStatus('error', t('report_need_img')); return; }
+
+  const now = new Date();
+  const dateStr = t('report_date_format')
+    .replace('{y}', now.getFullYear()).replace('{m}', now.getMonth()+1)
+    .replace('{d}', now.getDate()).replace('{h}', now.getHours())
+    .replace('{min}', ('0'+now.getMinutes()).slice(-2));
+
+  reportList.unshift({
+    id: Date.now(),
+    type: document.getElementById('reportType').selectedOptions[0].textContent,
+    typeKey: type,
+    location: loc,
+    description: desc,
+    image: reportImageData,
+    date: dateStr,
+    status: 'new',
+    likes: 0,
+    liked: false,
+    comments: []
+  });
+  saveReports();
+  renderReportList();
+
+  reportImageData = null;
+  document.getElementById('reportImgPreview').innerHTML = '';
+  document.getElementById('reportFile').value = '';
+  document.getElementById('reportType').value = '';
+  document.getElementById('reportLoc').value = '';
+  document.getElementById('reportDesc').value = '';
+
+  showReportStatus('success', t('report_success'));
+  setTimeout(() => switchTab('board'), 600);
+}
+
+function deleteReport(id) {
+  reportList = reportList.filter(r => r.id !== id);
+  saveReports();
+  renderReportList();
+}
+
+function changeReportStatus(id, status) {
+  const r = reportList.find(r => r.id === id);
+  if (r) { r.status = status; saveReports(); renderReportList(); }
+}
+
+function renderReportList() {
+  if (reportList.length === 0) {
+    document.getElementById('reportList').innerHTML =
+      `<div style="text-align:center;padding:24px;color:var(--text-light)">${t('report_empty')}</div>`;
+    return;
+  }
+  const statusLabels = { 'new': t('report_status_new'), 'check': t('report_status_check'), 'done': t('report_status_done') };
+  const statClass = { 'new': 'new', 'check': 'check', 'done': 'done' };
+  document.getElementById('reportList').innerHTML = reportList.map(r => {
+    const cmtHtml = r.comments.map(c =>
+      `<div style="font-size:12px;padding:6px 0;border-bottom:1px solid #eee;color:var(--text-light)">${c.text}<span style="float:right;font-size:10px">${c.date}</span></div>`
+    ).join('');
+    return `<div class="report-card">
+      <div class="report-header">
+        <img class="report-thumb" src="${r.image}" alt="" onerror="this.style.display='none'">
+        <div class="report-meta">
+          <div class="report-type">${r.type} <span class="report-badge ${statClass[r.status]||'new'}">${statusLabels[r.status]||r.status}</span></div>
+          <div class="report-loc">📍 ${r.location}</div>
+          <div class="report-loc">${r.date}</div>
+        </div>
+      </div>
+      <div class="report-desc">${r.description}</div>
+      <div class="report-footer">
+        <span style="display:flex;align-items:center;gap:10px">
+          <button onclick="toggleLike(${r.id})" style="background:none;border:none;cursor:pointer;font-size:14px;${r.liked?'color:var(--red)':''}">${r.liked?'❤️':'🤍'} ${r.likes||''}</button>
+          <button onclick="toggleComments(${r.id})" style="background:none;border:none;cursor:pointer;font-size:13px;color:var(--text-light)">💬 ${t('report_comments')} ${r.comments.length||''}</button>
+          ${r.status === 'new' ? `<button onclick="changeReportStatus(${r.id},'check')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--orange)">→ ${t('report_status_check')}</button>` : ''}
+          ${r.status === 'check' ? `<button onclick="changeReportStatus(${r.id},'done')" style="background:none;border:none;cursor:pointer;font-size:11px;color:var(--green)">→ ${t('report_status_done')}</button>` : ''}
+        </span>
+        <button onclick="deleteReport(${r.id})" style="background:none;border:none;cursor:pointer;font-size:12px;color:var(--red)">🗑️</button>
+      </div>
+      <div id="comments_${r.id}" style="display:none;margin-top:8px;padding:8px 0">
+        ${cmtHtml}
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input type="text" id="cmtInput_${r.id}" placeholder="${t('report_comment_ph')}" style="flex:1;padding:6px 10px;border:1px solid #ddd;border-radius:8px;font-size:12px" maxlength="200" onkeydown="if(event.key==='Enter')addComment(${r.id})">
+          <button onclick="addComment(${r.id})" style="padding:6px 10px;border:none;border-radius:8px;background:var(--teal);color:#fff;font-size:12px;cursor:pointer">${t('report_comment_btn')}</button>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function toggleComments(id) {
+  const el = document.getElementById('comments_' + id);
+  if (el) el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function addComment(id) {
+  const input = document.getElementById('cmtInput_' + id);
+  if (!input || !input.value.trim()) return;
+  const r = reportList.find(r => r.id === id);
+  if (!r) return;
+  const now = new Date();
+  r.comments.push({
+    id: Date.now(),
+    text: input.value.trim(),
+    date: now.getHours() + ':' + ('0'+now.getMinutes()).slice(-2)
+  });
+  input.value = '';
+  saveReports();
+  renderReportList();
+  document.getElementById('comments_' + id).style.display = 'block';
+}
+
+function toggleLike(id) {
+  const r = reportList.find(r => r.id === id);
+  if (!r) return;
+  r.liked = !r.liked;
+  r.likes = (r.likes || 0) + (r.liked ? 1 : -1);
+  saveReports();
+  renderReportList();
+}
+
+function showReportStatus(type, msg) {
+  const el = document.getElementById('reportStatus');
+  el.className = 'api-status show ' + type;
+  el.textContent = msg;
+  setTimeout(() => el.classList.remove('show'), 4000);
+}
+
+// ── 음성 인식 ──
+let voiceRecognition = null;
+let isListening = false;
+
+function initVoice() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return;
+  voiceRecognition = new SpeechRecognition();
+  voiceRecognition.lang = currentLang === 'ko' ? 'ko-KR' : currentLang === 'ja' ? 'ja-JP' : currentLang === 'zh-CN' ? 'zh-CN' : currentLang === 'vi' ? 'vi-VN' : 'en-US';
+  voiceRecognition.interimResults = true;
+  voiceRecognition.continuous = true;
+
+  voiceRecognition.onresult = function(event) {
+    let finalText = '';
+    for (let i = event.resultIndex; i < event.results.length; i++) {
+      finalText += event.results[i][0].transcript;
+    }
+    const active = document.activeElement;
+    if (active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA') && active.type !== 'file') {
+      active.value = finalText;
+      active.dispatchEvent(new Event('input', { bubbles: true }));
+    }
+  };
+
+  voiceRecognition.onend = function() {
+    isListening = false;
+    document.getElementById('voiceFab').classList.remove('listening');
+  };
+
+  voiceRecognition.onerror = function() {
+    isListening = false;
+    document.getElementById('voiceFab').classList.remove('listening');
+  };
+}
+
+function toggleVoice() {
+  if (!voiceRecognition) { initVoice(); if (!voiceRecognition) return; }
+  if (isListening) {
+    voiceRecognition.stop();
+    isListening = false;
+    document.getElementById('voiceFab').classList.remove('listening');
+  } else {
+    voiceRecognition.lang = currentLang === 'ko' ? 'ko-KR' : currentLang === 'ja' ? 'ja-JP' : currentLang === 'zh-CN' ? 'zh-CN' : currentLang === 'vi' ? 'vi-VN' : 'en-US';
+    voiceRecognition.start();
+    isListening = true;
+    document.getElementById('voiceFab').classList.add('listening');
+  }
+}
+
+// ── 초기화 ──
+function init() {
+  try { currentLang = localStorage.getItem('app_lang') || currentLang; } catch(e){}
+  applyLanguage(currentLang);
+  let savedMode = 'normal';
+  try { savedMode = localStorage.getItem('app_mode') || 'normal'; } catch(e) {}
+  setMode(savedMode);
+  loadApiConfig();
+  loadTT();
+  loadGeminiKey();
+  loadReports();
+  initVoice();
+  updateDateBadge();
+  renderMeals();
+  updateNutrition();
+  renderRestMeals();
+  updateRestNutrition();
+  renderTTDaySelector();
+  renderTimetable();
+  renderRecent();
+}
+init();
+</script>
+
+<script src="/__preview-bridge.js" data-preview-bridge></script>
+</body>
+</html>
